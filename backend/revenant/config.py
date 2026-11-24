@@ -8,15 +8,18 @@ from __future__ import annotations
 
 import base64
 import binascii
+import multiprocessing
+import os
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Values that appear in .env.example or the documentation. They are never
 # acceptable in production.
 _PLACEHOLDER_PREFIXES = ("CHANGE_ME",)
 _MIN_ADMIN_TOKEN_LENGTH = 24
+MULTI_WORKER_ERROR = "unsupported_multi_worker"
 
 
 class Settings(BaseSettings):
@@ -25,14 +28,32 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     env: Literal["development", "demo", "production"] = "development"
     log_level: str = "INFO"
 
+    # Hosting platforms provide DATABASE_URL without a prefix.
+    database_url: str = Field(
+        default="sqlite:///./revenant.db",
+        validation_alias=AliasChoices("DATABASE_URL", "REVENANT_DATABASE_URL"),
+    )
+
     # Master key (Fernet format) and management API token. Required in production.
     secret_key: SecretStr = SecretStr("")
+    # Only while rotating the master key: the old value.
+    secret_key_previous: SecretStr = SecretStr("")
     admin_token: SecretStr = SecretStr("")
+
+    # Comma-separated browser origins allowed to call the management API.
+    cors_origins: str = ""
+
+    # Exactly one worker is supported (docs/architecture.md, section 4.5).
+    web_concurrency: int | None = Field(
+        default=None, validation_alias=AliasChoices("WEB_CONCURRENCY")
+    )
+    workers: int | None = None
 
     # Outbound safety. See docs/security.md.
     allow_private_upstreams: bool = False
@@ -61,24 +82,58 @@ class Settings(BaseSettings):
                 ports.add(int(text))
         return frozenset(ports)
 
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [item.strip().rstrip("/") for item in self.cors_origins.split(",") if item.strip()]
+
 
 def _is_placeholder(value: str) -> bool:
     return any(value.startswith(prefix) for prefix in _PLACEHOLDER_PREFIXES)
 
 
-def _is_fernet_key(value: str) -> bool:
+def is_fernet_key(value: str) -> bool:
     try:
         return len(base64.urlsafe_b64decode(value.encode("ascii"))) == 32
     except (binascii.Error, ValueError, UnicodeEncodeError):
         return False
 
 
-def startup_problems(settings: Settings) -> list[str]:
+def under_multiprocess_supervisor() -> bool:
+    """True when this process was started as a worker by a process supervisor.
+
+    Uvicorn runs a single worker in the launching process itself. It only
+    spawns child processes (through ``multiprocessing``) for ``--workers N``
+    with N > 1 or for ``--reload``. Gunicorn announces itself in SERVER_SOFTWARE.
+    """
+    if multiprocessing.parent_process() is not None:
+        return True
+    return "gunicorn" in os.environ.get("SERVER_SOFTWARE", "").lower()
+
+
+def startup_problems(settings: Settings, *, supervised: bool | None = None) -> list[str]:
     """Return every reason the process must not start with these settings."""
     problems: list[str] = []
     secret_key = settings.secret_key.get_secret_value()
+    previous_key = settings.secret_key_previous.get_secret_value()
     admin_token = settings.admin_token.get_secret_value()
 
+    # --- exactly one worker ---------------------------------------------------
+    for name, value in (("WEB_CONCURRENCY", settings.web_concurrency),
+                        ("REVENANT_WORKERS", settings.workers)):
+        if value is not None and value != 1:
+            problems.append(
+                f"{MULTI_WORKER_ERROR}: {name} is {value}; exactly one worker is supported"
+            )
+    if supervised is None:
+        supervised = under_multiprocess_supervisor()
+    # A reloader in development also runs the app in a child process; that is fine.
+    if supervised and settings.env != "development":
+        problems.append(
+            f"{MULTI_WORKER_ERROR}: started by a multi-process supervisor; "
+            "run uvicorn with --workers 1 and without gunicorn"
+        )
+
+    # --- outbound -------------------------------------------------------------
     try:
         ports = settings.allowed_ports
     except ValueError:
@@ -87,8 +142,13 @@ def startup_problems(settings: Settings) -> list[str]:
         if any(port < 1 or port > 65535 for port in ports):
             problems.append("REVENANT_UPSTREAM_ALLOWED_PORTS contains a port outside 1-65535")
 
-    if secret_key and not _is_placeholder(secret_key) and not _is_fernet_key(secret_key):
+    # --- secrets --------------------------------------------------------------
+    if secret_key and not _is_placeholder(secret_key) and not is_fernet_key(secret_key):
         problems.append("REVENANT_SECRET_KEY is not a valid Fernet key")
+    if previous_key and not is_fernet_key(previous_key):
+        problems.append("REVENANT_SECRET_KEY_PREVIOUS is not a valid Fernet key")
+    if "*" in settings.cors_origin_list:
+        problems.append("REVENANT_CORS_ORIGINS must list explicit origins, not '*'")
 
     if settings.is_production:
         if not secret_key or _is_placeholder(secret_key):

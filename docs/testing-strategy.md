@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Revision 7 (slice 1 implemented: outbound guard in the application, Linux CI passing).
+Revision 8 (slices 1 and 2 implemented).
 
 This document covers two different things that must not be confused:
 
@@ -380,13 +380,27 @@ All timing uses the injected clock. The simulator can hold a response open and t
 | Database recovery | Writer resumes; `trace_loss` event if anything was dropped; health `ok` |
 | Upstream timeout / refusal | `504` / `502`; outcome `upstream_error` |
 
-PostgreSQL-specific behaviour (pool reconnect after a real connection drop, lease contention and handover between real processes) is exercised in CI against a PostgreSQL service container. The CI workflow (`.github/workflows/ci.yml`) runs on Linux and Windows. It does not yet include a PostgreSQL service; that job is added in slice 2 with the first migrations. These tests cannot be run on the current development machine.
+PostgreSQL-specific behaviour (pool reconnect after a real connection drop, lease contention and handover between real processes) is exercised in CI against a PostgreSQL service container. The CI workflow (`.github/workflows/ci.yml`) runs on Linux and Windows, and runs the unit, integration and credential tests a second time against a PostgreSQL 16 service container, where every test gets an emptied and freshly migrated database. Lease tests between real processes arrive with slice 6. PostgreSQL cannot be run on the current development machine, so PostgreSQL results come only from CI.
 
 ### Outbound connection tests
 
 Listed in `security.md` (SSRF rows): address rules, DNS rebinding with a resolver stub, mixed public/private answers, TLS hostname verification and SNI while connected by IP, revalidation of each new connection, redirect refusal and ignored proxy environment variables. They use a stub resolver and a local TLS server with a test certificate authority; no external network is contacted.
 
 **Status.** The spike in `spikes/outbound_transport` passed its complete suite (78 tests) and mutation check on Linux and Windows in CI on 2026-11-24 ([run](https://github.com/MaatlaHealth/API-Revenant/actions/runs/45490838142)). The guard has since been promoted to `revenant.security.outbound`. `backend/tests/security/test_outbound_transport.py` is generated from the spike's test file by `tools/sync_outbound_tests.py`, and CI fails if the two drift apart. `backend/tests/security/test_outbound_rules.py` adds cases for the URL rules, the settings-driven policy, the explicit exceptions and error mapping. `backend/tests/mutation/outbound_mutation_check.py` weakens the application module twenty ways and requires every non-equivalent weakening to be detected.
+
+### Implemented so far (slice 2)
+
+| Area | Tests |
+|---|---|
+| Migrations | Upgrade creates the tables; models and migrations describe the same schema (autogenerate comparison is empty); downgrade and re-upgrade; foreign keys, check constraints and the one-active-version partial unique index are enforced; failed unit of work rolls back |
+| Admin authentication | Ten malformed or wrong token forms rejected with the same envelope; every method of every management route requires the token; an unset token rejects everything; authentication runs before the project lookup; rejected tokens are not logged |
+| Error envelope | Not found, wrong method, validation (field named, submitted value never echoed), malformed JSON, unexpected error (message withheld), database unavailable (`503`) |
+| CORS | Listed origins allowed without credentials; lookalike origins get no headers; wildcard refused at start-up |
+| Single worker | `WEB_CONCURRENCY` or `REVENANT_WORKERS` other than 1, and a multi-process supervisor outside development, refuse start-up |
+| Credentials | Inbound keys stored only as keyed hashes (database dump searched for the plaintext and its hex form); multiple active keys; immediate revocation; project scoping; outbound values encrypted, versioned, rotated, rolled back and retired with never more than one active version; master-key rotation including upgrade-on-use; write-only API; audit records without values; no value in captured or rendered logs |
+| Redaction | Headers by name, sensitive paths, known secret values in any position including percent-encoded and as dictionary keys; the log processor scrubs registered secrets from any log line |
+
+`backend/tests/mutation/foundation_mutation_check.py` weakens twenty of these controls one at a time (for example: accept any token, store keys in plaintext, log the query string, return internal error messages) and requires each to be detected.
 
 ### End-to-end acceptance test
 

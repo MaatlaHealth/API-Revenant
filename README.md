@@ -6,9 +6,9 @@ API Revenant is a design for reconstructing discontinued or breaking APIs from i
 
 It reconstructs *observable interface behaviour*. It does not recover hidden source code or undocumented business logic. Every reconstructed behaviour is classified as **observed**, **inferred** or **unknown**, and linked to the evidence behind it.
 
-## Status: slice 1 of 8 implemented
+## Status: slices 1 and 2 of 8 implemented
 
-**This repository does not contain a working product yet.** The design is complete and reviewed, and the first implementation slice is in place. Nothing has been deployed.
+**This repository does not contain a working product yet.** The design is complete and reviewed, and the first two implementation slices are in place. Nothing has been deployed.
 
 | Area | State |
 |---|---|
@@ -17,7 +17,9 @@ It reconstructs *observable interface behaviour*. It does not recover hidden sou
 | SSRF-safe outbound HTTP client (resolve at connect, validate every address, connect by IP, hostname-based TLS, no redirects, no environment proxies) | **Implemented and tested** (`backend/revenant/security/outbound.py`), with a mutation check |
 | Outbound transport feasibility spike | **Kept as the reference** the application tests are generated from (`spikes/outbound_transport`) |
 | CI: lint, type check, tests, mutation checks, server smoke test, specification consistency | **Running** on Linux and Windows (`.github/workflows/ci.yml`) |
-| Database, migrations, authentication, credential storage | **Not implemented** (slice 2) |
+| Database layer and first migration (projects, credentials, audit log), verified on SQLite and PostgreSQL | **Implemented and tested** (`backend/revenant/db`, `backend/alembic`) |
+| Management API foundation: admin-token authentication, CORS allowlist, common error envelope, single-worker start-up check | **Implemented and tested** |
+| Credential storage: legacy-client keys as keyed hashes, replacement credentials encrypted and versioned with rotation and rollback, audit records, log redaction | **Implemented and tested** (`backend/revenant/security`), with a mutation check |
 | Evidence import, reconstruction, adapter, runtime, verification | **Not implemented** (slices 3–7) |
 | Demonstration services (GravePay, NovaPay simulator, legacy client) | **Not implemented.** `demo/` is a placeholder |
 | Frontend | **Not implemented.** `frontend/` is a placeholder |
@@ -25,7 +27,7 @@ It reconstructs *observable interface behaviour*. It does not recover hidden sou
 | Deployment (Render, Netlify) | **Configuration drafted, never deployed** |
 | Kiro project files (`.kiro/`) | **Authored outside Kiro and not yet loaded in it** |
 
-The backend currently does nothing useful to an end user: it starts, validates its configuration, and answers two health endpoints. Everything under the next heading describes the **planned** product.
+The backend currently does nothing useful to an end user: it starts, validates its configuration, answers two health endpoints, and stores credentials for projects. Projects themselves cannot yet be created through the API (slice 3). Everything under the next heading describes the **planned** product.
 
 ## How it is designed to work (planned)
 
@@ -42,22 +44,24 @@ A fictional discontinued payment API (**GravePay**) and a fictional replacement 
 
 ## What can be run today
 
-The backend (health endpoints only) and its tests, from the `backend` directory:
+The backend (health endpoints and credential storage) and its tests, from the `backend` directory:
 
 ```
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.lock.txt
 .venv\Scripts\python -m pip install --no-deps -e .
 .venv\Scripts\python -m pytest
+.venv\Scripts\python -m alembic upgrade head
 .venv\Scripts\python -m uvicorn revenant.main:app --port 8000 --workers 1 --no-access-log
 ```
 
 Then open `http://localhost:8000/healthz`. On Linux or macOS use `.venv/bin/python`.
 
-The mutation check, which weakens the outbound guard and confirms the tests notice (it temporarily rewrites and then restores one source file):
+The mutation checks, which weaken one security control at a time and confirm the tests notice (they temporarily rewrite and then restore source files):
 
 ```
 .venv\Scripts\python tests/mutation/outbound_mutation_check.py
+.venv\Scripts\python tests/mutation/foundation_mutation_check.py
 ```
 
 The specification consistency checks, from the repository root:
@@ -72,7 +76,8 @@ python tools/sync_outbound_tests.py --check
 
 `.github/workflows/ci.yml` runs on every push and pull request, on Linux and Windows:
 
-- the backend: lint, type check, tests, the outbound-guard mutation check and a server smoke test, from pinned dependency versions;
+- the backend: lint, type check, tests, two mutation checks and a migrate-and-start smoke test, from pinned dependency versions;
+- the backend tests again on a PostgreSQL service, plus migrations run from the command line as deployment does;
 - the outbound-transport spike suite and its mutation check;
 - the specification and configuration consistency check, including that the application's transport tests are identical to the spike's.
 
@@ -111,7 +116,7 @@ Development proceeds in vertical slices, each ending in something that runs and 
 |---|---|---|
 | — | Architecture, specifications, transport spike, CI definition | Done |
 | 1 | Linux CI and transport integration | Implemented |
-| 2 | Backend foundation and database migrations | Not started |
+| 2 | Backend foundation and database migrations | Implemented |
 | 3 | Project creation and evidence import | Not started |
 | 4 | Reconstruction and mapping approval | Not started |
 | 5 | Adapter compilation | Not started |

@@ -12,13 +12,9 @@ from revenant import __version__
 from revenant.config import Settings
 from revenant.logs import configure_logging, error_fields
 from revenant.main import create_app
+from tests.conftest import ADMIN_TOKEN, MASTER_KEY, make_settings
 
 SECRET_IN_QUERY = "k3y-that-must-never-be-logged"
-
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(create_app(Settings(_env_file=None)))  # type: ignore[call-arg]
 
 
 def test_healthz_reports_liveness(client: TestClient) -> None:
@@ -30,7 +26,34 @@ def test_healthz_reports_liveness(client: TestClient) -> None:
 def test_readyz_reports_readiness(client: TestClient) -> None:
     response = client.get("/readyz")
     assert response.status_code == 200
-    assert response.json() == {"status": "ready", "checks": {"configuration": "ok"}}
+    assert response.json() == {
+        "status": "ready",
+        "checks": {"configuration": "ok", "database": "ok", "migrations": "ok"},
+    }
+
+
+def test_readyz_is_not_ready_before_migrations(database_url: str) -> None:
+    app = create_app(make_settings(database_url), supervised=False)
+    response = TestClient(app).get("/readyz")
+    assert response.status_code == 503
+    assert response.json()["status"] == "not_ready"
+    assert response.json()["checks"]["migrations"] == "pending"
+
+
+def test_readyz_is_not_ready_when_database_is_unreachable() -> None:
+    unreachable = "postgresql+psycopg://nobody:nothing@127.0.0.1:1/none?connect_timeout=1"
+    app = create_app(make_settings(unreachable), supervised=False)
+    response = TestClient(app).get("/readyz")
+    assert response.status_code == 503
+    assert response.json()["checks"] == {
+        "configuration": "ok", "database": "unavailable", "migrations": "unknown",
+    }
+
+
+def test_healthz_does_not_depend_on_the_database() -> None:
+    unreachable = "postgresql+psycopg://nobody:nothing@127.0.0.1:1/none?connect_timeout=1"
+    app = create_app(make_settings(unreachable), supervised=False)
+    assert TestClient(app).get("/healthz").status_code == 200
 
 
 def test_unknown_path_is_not_found(client: TestClient) -> None:
@@ -73,8 +96,8 @@ def test_request_log_for_not_found_also_omits_query(client: TestClient) -> None:
     assert events[-1]["status"] == 404 and events[-1]["path"] == "/missing"
 
 
-def test_failed_request_is_logged_by_error_type_not_message() -> None:
-    app = create_app(Settings(_env_file=None))  # type: ignore[call-arg]
+def test_failed_request_is_logged_by_error_type_not_message(settings: Settings) -> None:
+    app = create_app(settings, supervised=False)
 
     @app.get("/boom")
     async def boom() -> None:
@@ -102,7 +125,24 @@ def test_log_output_is_json(capsys: pytest.CaptureFixture[str]) -> None:
     assert record["event"] == "hello" and record["answer"] == 42 and record["level"] == "info"
 
 
-def test_startup_log_does_not_contain_secret_values(capsys: pytest.CaptureFixture[str]) -> None:
-    token = "t" * 40
-    create_app(Settings(_env_file=None, admin_token=token))  # type: ignore[call-arg]
-    assert token not in capsys.readouterr().out
+def test_startup_log_does_not_contain_secret_values(
+    settings: Settings, capsys: pytest.CaptureFixture[str]
+) -> None:
+    create_app(settings, supervised=False)
+    output = capsys.readouterr().out
+    assert ADMIN_TOKEN not in output and MASTER_KEY not in output
+
+
+def test_configured_secrets_are_scrubbed_from_any_later_log_line(
+    settings: Settings, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Even code that logs a secret by mistake cannot get it into the output."""
+    create_app(settings, supervised=False)
+    capsys.readouterr()
+    structlog.get_logger("careless").info(
+        "debug_dump", note=f"token is {ADMIN_TOKEN}", nested={"k": [MASTER_KEY]},
+        admin_token=ADMIN_TOKEN,
+    )
+    output = capsys.readouterr().out
+    assert ADMIN_TOKEN not in output and MASTER_KEY not in output
+    assert output.count("[REDACTED]") == 3

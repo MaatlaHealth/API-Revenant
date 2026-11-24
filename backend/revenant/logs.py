@@ -18,6 +18,8 @@ from typing import Any
 
 import structlog
 
+from revenant.security.redaction import redact_log_event
+
 Scope = MutableMapping[str, Any]
 Message = MutableMapping[str, Any]
 Receive = Callable[[], Awaitable[Message]]
@@ -35,6 +37,8 @@ def configure_logging(level: str = "INFO") -> None:
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
+            # Last step before rendering: scrub known secrets and sensitive keys.
+            redact_log_event,
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(

@@ -31,17 +31,17 @@ Rules for every slice:
 
 *Done when:* migrations apply on SQLite and PostgreSQL in CI; the management API rejects unauthenticated calls; credentials can be stored and are never returned.
 
-- [ ] 2.1 SQLAlchemy models and the initial Alembic migration; upgrade verified on SQLite and PostgreSQL; add the PostgreSQL service job to CI
+- [x] 2.1 SQLAlchemy models and the initial Alembic migration (projects, both credential tables, audit records; further tables arrive with the slice that uses them); upgrade verified on SQLite and PostgreSQL; add the PostgreSQL service job to CI
   - _Requirements: 12.1, 12.5_
-- [ ] 2.2 Admin-token dependency, CORS allowlist and the common error envelope
+- [x] 2.2 Admin-token dependency, CORS allowlist and the common error envelope
   - _Requirements: 11.4_
-- [ ] 2.3 Single-worker start-up check (`WEB_CONCURRENCY`, `REVENANT_WORKERS`, supervisor detection) that refuses to start with `unsupported_multi_worker`
+- [x] 2.3 Single-worker start-up check (`WEB_CONCURRENCY`, `REVENANT_WORKERS`, supervisor detection) that refuses to start with `unsupported_multi_worker`
   - _Requirements: 7.18_
-- [ ] 2.4 Inbound key store: keyed-hash verifiers, multiple active keys, constant-time verification, add/revoke API
+- [x] 2.4 Inbound key store: keyed-hash verifiers, multiple active keys, constant-time verification, add/revoke API. *Refusing to revoke the last active key of a running runtime belongs to task 6.3, where runtimes exist.*
   - _Requirements: 11.3, 11.7, 6.10_
-- [ ] 2.5 Outbound credential store: Fernet encryption, versions, rotate/rollback/retire API, master-key rotation with `REVENANT_SECRET_KEY_PREVIOUS`
+- [x] 2.5 Outbound credential store: Fernet encryption, versions, rotate/rollback/retire API, master-key rotation with `REVENANT_SECRET_KEY_PREVIOUS`. *Reloading a running adapter on rotation belongs to task 6.3.*
   - _Requirements: 11.3, 11.8, 5.6_
-- [ ] 2.6 Redactor for logs and traces, with tests that search captured output for both credential values
+- [x] 2.6 Redactor for logs and traces, with tests that search captured output for both credential values
   - _Requirements: 11.3_
 
 ## Slice 3 — Project creation and evidence import

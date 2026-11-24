@@ -89,3 +89,78 @@ def test_problem_messages_never_contain_secret_values() -> None:
 def test_secrets_are_not_exposed_by_repr() -> None:
     text = repr(settings(secret_key=VALID_KEY, admin_token=VALID_TOKEN))
     assert VALID_KEY not in text and VALID_TOKEN not in text
+
+
+# ----------------------------------------------------------------------------- single worker
+
+
+@pytest.mark.parametrize("overrides", [
+    {"web_concurrency": 2}, {"web_concurrency": 0}, {"workers": 4},
+    {"web_concurrency": 1, "workers": 2},
+])
+def test_more_than_one_worker_is_refused(overrides: dict[str, object]) -> None:
+    problems = startup_problems(settings(**overrides), supervised=False)
+    assert problems and all(p.startswith("unsupported_multi_worker") for p in problems)
+
+
+@pytest.mark.parametrize("overrides", [{}, {"web_concurrency": 1}, {"workers": 1},
+                                       {"web_concurrency": 1, "workers": 1}])
+def test_exactly_one_worker_starts(overrides: dict[str, object]) -> None:
+    assert startup_problems(settings(**overrides), supervised=False) == []
+
+
+def test_web_concurrency_is_read_from_the_unprefixed_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", "3")
+    loaded = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert loaded.web_concurrency == 3
+    assert startup_problems(loaded, supervised=False)[0].startswith("unsupported_multi_worker")
+
+
+@pytest.mark.parametrize("env", ["demo", "production"])
+def test_multi_process_supervisor_is_refused_outside_development(env: str) -> None:
+    configured = settings(env=env, secret_key=VALID_KEY, admin_token=VALID_TOKEN)
+    problems = startup_problems(configured, supervised=True)
+    assert len(problems) == 1 and problems[0].startswith("unsupported_multi_worker")
+    assert startup_problems(configured, supervised=False) == []
+
+
+def test_reloader_child_process_is_allowed_in_development() -> None:
+    assert startup_problems(settings(), supervised=True) == []
+
+
+def test_gunicorn_is_detected_as_a_supervisor(monkeypatch: pytest.MonkeyPatch) -> None:
+    from revenant.config import under_multiprocess_supervisor
+
+    assert under_multiprocess_supervisor() is False
+    monkeypatch.setenv("SERVER_SOFTWARE", "gunicorn/23.0.0")
+    assert under_multiprocess_supervisor() is True
+
+
+def test_application_refuses_to_build_with_two_workers() -> None:
+    with pytest.raises(ConfigurationError) as excinfo:
+        create_app(settings(web_concurrency=2), supervised=False)
+    assert "unsupported_multi_worker" in str(excinfo.value)
+
+
+# ----------------------------------------------------------------------------- other settings
+
+
+def test_database_url_is_read_from_the_unprefixed_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgres://u:p@h/d")
+    assert Settings(_env_file=None).database_url == "postgres://u:p@h/d"  # type: ignore[call-arg]
+
+
+def test_wildcard_cors_origin_is_refused() -> None:
+    problems = startup_problems(settings(cors_origins="https://app.example.com, *"),
+                                supervised=False)
+    assert problems == ["REVENANT_CORS_ORIGINS must list explicit origins, not '*'"]
+
+
+def test_malformed_previous_secret_key_is_refused() -> None:
+    problems = startup_problems(settings(secret_key=VALID_KEY, secret_key_previous="nope"),
+                                supervised=False)
+    assert problems == ["REVENANT_SECRET_KEY_PREVIOUS is not a valid Fernet key"]
