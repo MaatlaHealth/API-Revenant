@@ -1,0 +1,18 @@
+# Netlify — frontend only. The backend is a separate long-running service.
+# Set NEXT_PUBLIC_API_URL in the Netlify dashboard to the backend's public URL.
+# Untested until a deployment is recorded in docs/deployment.md.
+
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Gate for the outbound HTTP transport. The transport may not be used by
+  # application code until this job has passed on Linux (requirement 12.6).
+  # Dependencies are installed from the exact versions the spike was developed
+  # against. Do not relax a test or an SSRF control to make this job pass.
+  outbound-transport:
+    name: Outbound transport spike (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned dependencies
+        run: python -m pip install --disable-pip-version-check -r spikes/outbound_transport/requirements.lock.txt
+      - name: Show environment
+        run: |
+          python --version
+          python -m pip freeze
+      - name: Run the complete spike test suite
+        working-directory: spikes/outbound_transport
+        run: python -m pytest -v -p no:cacheprovider
+      - name: Mutation check (the tests must detect a weakened guard)
+        run: python spikes/outbound_transport/mutation_check.py
+
+  spec-consistency:
+    name: Specification and configuration consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check "pyyaml==6.0.3"
+      - run: python tools/check_spec.py
+
+  # Backend jobs (lint, type checks, tests on SQLite and PostgreSQL) are added
+  # in Stage 2 slice 1, once backend/ contains code.

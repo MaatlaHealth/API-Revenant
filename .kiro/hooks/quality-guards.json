@@ -1,0 +1,25 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "transform-language-sync",
+      "description": "When the transformation engine changes, check that the language document, validator and tests changed with it.",
+      "trigger": "PostFileSave",
+      "matcher": "backend/revenant/transform/.*\\.py$",
+      "action": {
+        "type": "agent",
+        "prompt": "A file in backend/revenant/transform was saved. Check whether the change adds or alters a rule operation or path behaviour. If so, confirm docs/transformation-language.md, the static validator and the unit/property tests reflect it, and list anything that is out of sync. Do not add expression evaluation or code execution."
+      }
+    },
+    {
+      "name": "legacy-client-frozen",
+      "description": "The demonstration's legacy client must never be modified after it is written.",
+      "trigger": "PostFileSave",
+      "matcher": "demo/legacy-client/.*",
+      "action": {
+        "type": "agent",
+        "prompt": "A file under demo/legacy-client was saved. This client must remain unchanged so the demonstration is honest. If demo/legacy-client/SHA256 already exists and no longer matches the client source, warn the user clearly and recommend reverting the change."
+      }
+    }
+  ]
+}

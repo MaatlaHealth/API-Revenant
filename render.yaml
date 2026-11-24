@@ -1,0 +1,48 @@
+# Render Blueprint — backend and PostgreSQL. Render is the only supported backend target.
+# Untested until a deployment is recorded in docs/deployment.md.
+
+databases:
+  - name: revenant-db
+    plan: free
+    databaseName: revenant
+    user: revenant
+
+services:
+  - type: web
+    name: api-revenant
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install .
+    # Exactly one worker and one instance are required (docs/architecture.md §4.5).
+    # The app refuses to start if WEB_CONCURRENCY is not 1.
+    numInstances: 1
+    # --no-access-log: the built-in access log prints full URLs, which could
+    # include a query-parameter credential. Do not remove it.
+    startCommand: alembic upgrade head && uvicorn revenant.main:app --host 0.0.0.0 --port $PORT --workers 1 --no-access-log
+    healthCheckPath: /readyz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: REVENANT_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: revenant-db
+          property: connectionString
+      - key: REVENANT_ENABLE_DEMO_SIMULATOR
+        value: "true"
+      # Set these in the Render dashboard; never commit values.
+      - key: REVENANT_SECRET_KEY
+        sync: false
+      - key: REVENANT_ADMIN_TOKEN
+        sync: false
+      - key: REVENANT_CORS_ORIGINS
+        sync: false
+      # The service's own public hostname, e.g. api-revenant.onrender.com.
+      # The management API answers only on hosts listed here.
+      - key: REVENANT_PUBLIC_HOSTS
+        sync: false

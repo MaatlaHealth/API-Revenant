@@ -1,0 +1,121 @@
+# API Revenant — demonstration topology.
+#
+# STAGE 1 STATUS: this file defines the intended topology. The Dockerfiles it
+# references are created in Stages 2–3, so it does not build yet, and it has
+# not been run (Docker is not installed on the development machine).
+#
+# GravePay and NovaPay are fictional demonstration services.
+#
+#   Before:  docker compose --profile before run --rm legacy-client-before
+#   After:   docker compose --profile after  run --rm legacy-client-after
+#
+# The only difference between the two phases is which container answers the
+# original hostname api.gravepay.demo. The client image and source are the same.
+
+x-legacy-client: &legacy-client
+  build: ./demo/legacy-client
+  # No GRAVEPAY_BASE_URL override: the client uses the hostname compiled into
+  # its source, http://api.gravepay.demo:8000.
+  environment:
+    GRAVEPAY_API_KEY: ${DEMO_LEGACY_API_KEY:-legacy-demo-key}
+  networks: [demo]
+
+services:
+  novapay:
+    profiles: [before, after]
+    build: ./demo/novapay
+    environment:
+      NOVAPAY_ACCEPTED_TOKEN: ${DEMO_REPLACEMENT_TOKEN:-replacement-demo-token}
+    networks:
+      demo:
+        aliases: [api.novapay.demo]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # BEFORE: the legacy hostname points straight at the replacement API.
+  gravepay-points-to-novapay:
+    profiles: [before]
+    build: ./demo/novapay
+    environment:
+      NOVAPAY_ACCEPTED_TOKEN: ${DEMO_REPLACEMENT_TOKEN:-replacement-demo-token}
+    networks:
+      demo:
+        aliases: [api.gravepay.demo]
+
+  legacy-client-before:
+    <<: *legacy-client
+    profiles: [before]
+    depends_on: [gravepay-points-to-novapay]
+
+  # AFTER: the legacy hostname points at the API Revenant runtime.
+  postgres:
+    profiles: [after]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: revenant
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: revenant
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [demo]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U revenant"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  revenant:
+    profiles: [after]
+    build: ./backend
+    environment:
+      REVENANT_ENV: demo
+      DATABASE_URL: postgresql+psycopg://revenant:${POSTGRES_PASSWORD}@postgres:5432/revenant
+      REVENANT_SECRET_KEY: ${REVENANT_SECRET_KEY:?set REVENANT_SECRET_KEY in .env}
+      REVENANT_ADMIN_TOKEN: ${REVENANT_ADMIN_TOKEN:?set REVENANT_ADMIN_TOKEN in .env}
+      REVENANT_CORS_ORIGINS: http://localhost:3000
+      WEB_CONCURRENCY: "1"
+      # Management hosts. api.gravepay.demo is deliberately NOT listed: it is
+      # registered as a legacy host and reaches only the runtime.
+      REVENANT_PUBLIC_HOSTS: revenant,localhost,127.0.0.1
+      # Demo only: the simulator lives on the private Docker network.
+      REVENANT_UPSTREAM_ALLOWLIST: api.novapay.demo
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      novapay: { condition: service_healthy }
+    networks:
+      demo:
+        aliases: [api.gravepay.demo]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: drives the real workflow through the management API
+  # (seed demo project, approve mappings, compile, set secrets, start runtime).
+  demo-setup:
+    profiles: [after]
+    build: ./backend
+    command: ["python", "-m", "revenant.demo_setup", "--api", "http://revenant:8000"]
+    environment:
+      REVENANT_ADMIN_TOKEN: ${REVENANT_ADMIN_TOKEN}
+      DEMO_LEGACY_API_KEY: ${DEMO_LEGACY_API_KEY:-legacy-demo-key}
+      DEMO_REPLACEMENT_TOKEN: ${DEMO_REPLACEMENT_TOKEN:-replacement-demo-token}
+    depends_on:
+      revenant: { condition: service_healthy }
+    networks: [demo]
+
+  legacy-client-after:
+    <<: *legacy-client
+    profiles: [after]
+    depends_on:
+      demo-setup: { condition: service_completed_successfully }
+
+networks:
+  demo:
+
+volumes:
+  pgdata:
