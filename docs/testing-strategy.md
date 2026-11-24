@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Revision 6 (CTO review corrections applied; outbound transport spike completed on Windows, Linux CI run pending).
+Revision 7 (slice 1 implemented: outbound guard in the application, Linux CI passing).
 
 This document covers two different things that must not be confused:
 
@@ -380,13 +380,13 @@ All timing uses the injected clock. The simulator can hold a response open and t
 | Database recovery | Writer resumes; `trace_loss` event if anything was dropped; health `ok` |
 | Upstream timeout / refusal | `504` / `502`; outcome `upstream_error` |
 
-PostgreSQL-specific behaviour (pool reconnect after a real connection drop, lease contention and handover between real processes) is exercised in CI against a PostgreSQL service container. The CI workflow (`.github/workflows/ci.yml`) exists but has not been executed yet, because the repository has not been pushed. These tests cannot be run on the current development machine.
+PostgreSQL-specific behaviour (pool reconnect after a real connection drop, lease contention and handover between real processes) is exercised in CI against a PostgreSQL service container. The CI workflow (`.github/workflows/ci.yml`) runs on Linux and Windows. It does not yet include a PostgreSQL service; that job is added in slice 2 with the first migrations. These tests cannot be run on the current development machine.
 
 ### Outbound connection tests
 
 Listed in `security.md` (SSRF rows): address rules, DNS rebinding with a resolver stub, mixed public/private answers, TLS hostname verification and SNI while connected by IP, revalidation of each new connection, redirect refusal and ignored proxy environment variables. They use a stub resolver and a local TLS server with a test certificate authority; no external network is contacted.
 
-**Feasibility already demonstrated.** `spikes/outbound_transport` contains an executable implementation on `httpx` and `httpcore` with 78 passing tests covering each of these points, plus mutation checks in which 13 of 14 deliberate weakenings of the guard were detected (the fourteenth is an equivalent mutant). Stage 2 moves the implementation into `revenant.security.outbound` and keeps the tests. The spike has been run on Windows only. The CI workflow runs the complete spike suite and its mutation check on Linux with pinned dependencies (`spikes/outbound_transport/requirements.lock.txt`); that run is the gate for using the transport in application code, and it has **not yet been executed**.
+**Status.** The spike in `spikes/outbound_transport` passed its complete suite (78 tests) and mutation check on Linux and Windows in CI on 2026-11-24 ([run](https://github.com/MaatlaHealth/API-Revenant/actions/runs/45490838142)). The guard has since been promoted to `revenant.security.outbound`. `backend/tests/security/test_outbound_transport.py` is generated from the spike's test file by `tools/sync_outbound_tests.py`, and CI fails if the two drift apart. `backend/tests/security/test_outbound_rules.py` adds cases for the URL rules, the settings-driven policy, the explicit exceptions and error mapping. `backend/tests/mutation/outbound_mutation_check.py` weakens the application module twenty ways and requires every non-equivalent weakening to be detected.
 
 ### End-to-end acceptance test
 

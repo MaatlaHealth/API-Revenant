@@ -6,24 +6,26 @@ API Revenant is a design for reconstructing discontinued or breaking APIs from i
 
 It reconstructs *observable interface behaviour*. It does not recover hidden source code or undocumented business logic. Every reconstructed behaviour is classified as **observed**, **inferred** or **unknown**, and linked to the evidence behind it.
 
-## Status: design complete, application not yet built
+## Status: slice 1 of 8 implemented
 
-**This repository does not contain a working application yet.** It contains the reviewed architecture and specifications, one feasibility spike with tests, and a CI workflow. Nothing has been deployed.
+**This repository does not contain a working product yet.** The design is complete and reviewed, and the first implementation slice is in place. Nothing has been deployed.
 
 | Area | State |
 |---|---|
 | Architecture, requirements, data model, API contracts, security and testing design | **Written and reviewed** (`docs/`, `.kiro/specs/`) |
-| Outbound transport feasibility spike | **Implemented and tested** (`spikes/outbound_transport`) — 78 tests passing on Windows; see [CI](#continuous-integration) for Linux |
-| Specification consistency checker | **Implemented** (`tools/check_spec.py`) |
-| CI workflow | **Defined** (`.github/workflows/ci.yml`) |
-| Backend (evidence import, reconstruction, adapter, runtime, verification) | **Not implemented.** `backend/` holds a dependency manifest only |
+| Backend foundation: configuration with production start-up checks, structured request logging without query strings, `/healthz` and `/readyz` | **Implemented and tested** (`backend/revenant`) |
+| SSRF-safe outbound HTTP client (resolve at connect, validate every address, connect by IP, hostname-based TLS, no redirects, no environment proxies) | **Implemented and tested** (`backend/revenant/security/outbound.py`), with a mutation check |
+| Outbound transport feasibility spike | **Kept as the reference** the application tests are generated from (`spikes/outbound_transport`) |
+| CI: lint, type check, tests, mutation checks, server smoke test, specification consistency | **Running** on Linux and Windows (`.github/workflows/ci.yml`) |
+| Database, migrations, authentication, credential storage | **Not implemented** (slice 2) |
+| Evidence import, reconstruction, adapter, runtime, verification | **Not implemented** (slices 3–7) |
 | Demonstration services (GravePay, NovaPay simulator, legacy client) | **Not implemented.** `demo/` is a placeholder |
 | Frontend | **Not implemented.** `frontend/` is a placeholder |
 | Docker Compose demonstration | **Planned topology only**; it references images that do not exist yet and has never been run |
 | Deployment (Render, Netlify) | **Configuration drafted, never deployed** |
 | Kiro project files (`.kiro/`) | **Authored outside Kiro and not yet loaded in it** |
 
-Everything below the next heading describes the **planned** product.
+The backend currently does nothing useful to an end user: it starts, validates its configuration, and answers two health endpoints. Everything under the next heading describes the **planned** product.
 
 ## How it is designed to work (planned)
 
@@ -40,32 +42,41 @@ A fictional discontinued payment API (**GravePay**) and a fictional replacement 
 
 ## What can be run today
 
-The outbound transport spike, which proves that the SSRF-safe connection design works on `httpx` and `httpcore`:
+The backend (health endpoints only) and its tests, from the `backend` directory:
 
 ```
 python -m venv .venv
-.venv\Scripts\python -m pip install -r spikes/outbound_transport/requirements.lock.txt
-cd spikes/outbound_transport
-..\..\.venv\Scripts\python -m pytest -v
+.venv\Scripts\python -m pip install -r requirements.lock.txt
+.venv\Scripts\python -m pip install --no-deps -e .
+.venv\Scripts\python -m pytest
+.venv\Scripts\python -m uvicorn revenant.main:app --port 8000 --workers 1 --no-access-log
 ```
 
-On Linux or macOS use `.venv/bin/python`. See [`spikes/outbound_transport/README.md`](spikes/outbound_transport/README.md).
+Then open `http://localhost:8000/healthz`. On Linux or macOS use `.venv/bin/python`.
 
-The specification consistency check:
+The mutation check, which weakens the outbound guard and confirms the tests notice (it temporarily rewrites and then restores one source file):
+
+```
+.venv\Scripts\python tests/mutation/outbound_mutation_check.py
+```
+
+The specification consistency checks, from the repository root:
 
 ```
 python -m pip install pyyaml
 python tools/check_spec.py
+python tools/sync_outbound_tests.py --check
 ```
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push and pull request:
+`.github/workflows/ci.yml` runs on every push and pull request, on Linux and Windows:
 
-- the complete outbound-transport spike suite and its mutation check, on Linux and Windows, from pinned dependency versions;
-- the specification and configuration consistency check.
+- the backend: lint, type check, tests, the outbound-guard mutation check and a server smoke test, from pinned dependency versions;
+- the outbound-transport spike suite and its mutation check;
+- the specification and configuration consistency check, including that the application's transport tests are identical to the spike's.
 
-The Linux run is the gate for starting application development: the transport may not be used by application code until it passes there. Results are on the repository's Actions tab; this file does not assert a result.
+The transport was accepted as an application dependency only after the spike passed on Linux. Results are on the repository's Actions tab; this file does not assert a result.
 
 ## Documentation
 
@@ -99,7 +110,7 @@ Development proceeds in vertical slices, each ending in something that runs and 
 | Slice | Scope | Status |
 |---|---|---|
 | — | Architecture, specifications, transport spike, CI definition | Done |
-| 1 | Linux CI and transport integration | Not started; gated on the Linux CI result |
+| 1 | Linux CI and transport integration | Implemented |
 | 2 | Backend foundation and database migrations | Not started |
 | 3 | Project creation and evidence import | Not started |
 | 4 | Reconstruction and mapping approval | Not started |

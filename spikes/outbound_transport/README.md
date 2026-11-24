@@ -1,6 +1,6 @@
 # Spike: SSRF-safe outbound transport
 
-**This is a feasibility spike, not application code.** It proves that the outbound-connection rules in `docs/security.md` can be implemented on the chosen HTTP client. Nothing in `backend/` imports it. Stage 2 task 2.1 re-implements it inside `revenant.security.outbound` with the application's configuration, logging and error types, and carries these tests across.
+**This is a feasibility spike, not application code.** It proves that the outbound-connection rules in `docs/security.md` can be implemented on the chosen HTTP client. Nothing in `backend/` imports it. It has since been promoted to `backend/revenant/security/outbound.py`, which adds the application's configuration, URL rules and error types; the tests here are carried across unchanged.
 
 ## What was selected
 
@@ -10,7 +10,7 @@
 | Connection layer | `httpcore` connection pool |
 | Extension point | `httpcore.AsyncNetworkBackend`, passed to `httpcore.AsyncConnectionPool(network_backend=...)`, wrapped in a custom `httpx.AsyncBaseTransport` |
 | Versions tested | Python 3.12.10, httpx 0.28.1, httpcore 1.0.9, anyio 4.16.0, h11 0.16.0, cryptography 50.0.2, pytest 9.2.0 |
-| Platform tested | Windows 11 only |
+| Platforms tested | Windows 11 (local); `ubuntu-latest` and `windows-latest` (GitHub Actions) |
 
 Only public interfaces are used. `httpx.AsyncHTTPTransport` does not expose the network backend, so the spike supplies its own small transport around an `httpcore` pool instead of reaching into private attributes.
 
@@ -40,7 +40,9 @@ To reproduce the exact tested versions, install `requirements.lock.txt` instead.
 
 ## Linux status
 
-**Not yet run on Linux.** `.github/workflows/ci.yml` runs this suite and the mutation check on `ubuntu-latest` and `windows-latest` from `requirements.lock.txt`. The repository has not been pushed, so that workflow has not executed. The transport is not accepted as an application dependency until the Linux job passes.
+**Passed on Linux and Windows in CI on 2026-11-24**, commit `cf9841f`, from `requirements.lock.txt`: [workflow run](https://github.com/MaatlaHealth/API-Revenant/actions/runs/45490838142). On `ubuntu-latest` and on `windows-latest` the dependency install, the complete test suite and the mutation check each completed successfully. With that result the transport was accepted as an application dependency and promoted to `backend/revenant/security/outbound.py`.
+
+This directory is now kept as the reference the application tests are generated from (`tools/sync_outbound_tests.py`); CI still runs it.
 
 ## Results (2026-11-24)
 
@@ -70,7 +72,7 @@ One was not detected and is an equivalent mutant: removing the explicit link-loc
 
 ## Limitations of this spike
 
-- Tested on Windows with the asyncio event loop only. Linux (the Render runtime) is not yet exercised; the code uses no platform-specific calls, and CI must run these tests on Linux.
+- Tested with the asyncio event loop only, on Windows locally and on Linux and Windows in CI.
 - The async path only. A synchronous client is not needed by the design.
 - HTTP/1.1 only; HTTP/2 is disabled on purpose.
 - The test certificate chain is one authority deep, with ECDSA P-256 keys.

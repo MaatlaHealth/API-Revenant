@@ -57,6 +57,51 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install --disable-pip-version-check "pyyaml==6.0.3"
       - run: python tools/check_spec.py
+      - name: Application transport tests are identical to the spike's
+        run: python tools/sync_outbound_tests.py --check
 
-  # Backend jobs (lint, type checks, tests on SQLite and PostgreSQL) are added
-  # in Stage 2 slice 1, once backend/ contains code.
+  backend:
+    name: Backend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned dependencies, then the project without resolving again
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements.lock.txt
+          python -m pip install --disable-pip-version-check --no-deps -e .
+      - name: Lint
+        run: python -m ruff check .
+      - name: Type check
+        run: python -m mypy
+      - name: Tests
+        run: python -m pytest -v
+      - name: Mutation check of the outbound guard
+        if: matrix.os == 'ubuntu-latest'
+        run: python tests/mutation/outbound_mutation_check.py
+      - name: Start the server and call the health endpoints
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python -m uvicorn revenant.main:app --port 8000 --workers 1 --no-access-log &
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --silent --fail http://127.0.0.1:8000/healthz; then break; fi
+            sleep 1
+          done
+          echo
+          curl --silent --fail http://127.0.0.1:8000/healthz | grep '"status":"ok"'
+          curl --silent --fail http://127.0.0.1:8000/readyz | grep '"status":"ready"'
+
+  # A PostgreSQL service job is added in slice 2, with the first migrations.
+  # There is no database code to test yet.

@@ -1,6 +1,6 @@
 # API Revenant — Technical Architecture
 
-Status: Stage 1 design, revision 6 (CTO review corrections applied; outbound transport feasibility spike completed on Windows, Linux CI run pending). Nothing in this document is implemented yet unless a later stage says so.
+Status: Stage 1 design, revision 6. Implementation status: slice 1 (configuration, logging, health endpoints, outbound guard) is implemented and tested; everything else in this document is still design. See `README.md` for what exists.
 
 ## 1. System overview
 

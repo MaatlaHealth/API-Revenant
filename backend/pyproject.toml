@@ -8,40 +8,34 @@ version = "0.1.0"
 description = "Reconstructs discontinued APIs from evidence and serves them through a verified compatibility runtime."
 requires-python = ">=3.12"
 license = { text = "MIT" }
+# Dependencies are added slice by slice, only when code uses them.
+# Exact tested versions are in requirements.lock.txt, which CI installs.
 dependencies = [
-  "fastapi>=0.115",
-  "uvicorn[standard]>=0.30",
-  "pydantic>=2.8",
-  "pydantic-settings>=2.4",
-  "sqlalchemy>=2.0.30",
-  "alembic>=1.13",
-  "psycopg[binary]>=3.2",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+  "structlog>=24.4",
   "httpx>=0.28,<0.29",
   "httpcore>=1.0.9,<2",
-  "pyyaml>=6.0",
-  "cryptography>=43",
-  "structlog>=24.4",
-  "python-multipart>=0.0.9",
-  "hypothesis>=6.110",
-  "jsonschema>=4.23",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3",
-  "pytest-asyncio>=0.24",
-  "pytest-cov>=5.0",
   "ruff>=0.6",
   "mypy>=1.11",
-  "types-PyYAML",
+  # Test-only for now (throwaway certificates). Becomes a runtime dependency
+  # in slice 2, when credentials are encrypted at rest.
+  "cryptography>=43",
 ]
 
 [tool.setuptools.packages.find]
 include = ["revenant*"]
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
 
 [tool.ruff]
 line-length = 100
@@ -51,13 +45,21 @@ target-version = "py312"
 select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+# S104: tests name 0.0.0.0 as an address to be rejected; nothing binds to it.
+"tests/**" = ["S101", "S104", "S105", "S106", "S310"]
+# Generated from spikes/outbound_transport by a mechanical rename so the
+# application is held to exactly the cases that passed the Linux CI gate.
+# Style rules are relaxed here instead of editing the cases.
+"tests/security/test_outbound_transport.py" = ["E501", "B023", "B904", "UP017", "ASYNC109"]
+# httpcore's network-backend interface requires a `timeout` parameter.
+"revenant/security/outbound.py" = ["ASYNC109"]
 
 [tool.mypy]
 python_version = "3.12"
 warn_unused_ignores = true
 disallow_untyped_defs = true
+files = ["revenant"]
 
 [[tool.mypy.overrides]]
-module = ["revenant.transform.*", "revenant.security.*"]
+module = ["revenant.security.*"]
 strict = true

@@ -4,7 +4,7 @@ Revision 6. The plan is organised as **vertical slices**. Each slice ends with s
 
 Stage 1 (specifications, scaffold, the outbound-transport spike and the CI workflow definition) is complete and not listed.
 
-**Entry gate for Stage 2.** No slice below may begin until the CI workflow has run on Linux and the complete outbound-transport spike suite and its mutation check have passed there with the pinned dependencies (task 1.1). As of this revision the workflow has not been executed.
+**Entry gate for Stage 2 — met.** The CI workflow ran on commit `cf9841f` on 2026-11-24; the complete outbound-transport spike suite and its mutation check passed on `ubuntu-latest` and `windows-latest` with the pinned dependencies ([run](https://github.com/MaatlaHealth/API-Revenant/actions/runs/45490838142)).
 
 Rules for every slice:
 
@@ -18,21 +18,21 @@ Rules for every slice:
 
 *Done when:* CI is green on Linux for the spike suite, the mutation check and the first backend tests; the backend starts and answers `/healthz`; the outbound guard lives in the application with the spike's tests passing against it.
 
-- [ ] 1.1 **Gate:** push the repository, run `.github/workflows/ci.yml`, and record the Linux result of the complete outbound-transport spike suite and mutation check with `requirements.lock.txt`. Fix defects found; never by relaxing a test or an SSRF control
+- [x] 1.1 **Gate:** push the repository, run `.github/workflows/ci.yml`, and record the Linux result of the complete outbound-transport spike suite and mutation check with `requirements.lock.txt`. Fix defects found; never by relaxing a test or an SSRF control
   - _Requirements: 12.5, 12.6_
-- [ ] 1.2 Create the `revenant` package, settings (`pydantic-settings`), structured logging with query-free request paths and no raw exception messages, app factory, `/healthz` and `/readyz`; production start-up checks for example secrets and unsafe flags
+- [x] 1.2 Create the `revenant` package, settings (`pydantic-settings`), structured logging with query-free request paths and no raw exception messages, app factory, `/healthz` and `/readyz`; production start-up checks for example secrets and unsafe flags
   - _Requirements: 11.5, 12.2, 6.18_
-- [ ] 1.3 Outbound guard in `revenant.security.outbound`, promoted from `spikes/outbound_transport` (httpx on an httpcore pool with a custom network backend): URL rules, resolve immediately before each new connection, validate every IPv4 and IPv6 address, refuse mixed answers, connect to the validated address with no second resolution, hostname-based SNI and certificate verification, bounded connection reuse, environment proxies ignored, redirects refused
+- [x] 1.3 Outbound guard in `revenant.security.outbound`, promoted from `spikes/outbound_transport` (httpx on an httpcore pool with a custom network backend): URL rules, resolve immediately before each new connection, validate every IPv4 and IPv6 address, refuse mixed answers, connect to the validated address with no second resolution, hostname-based SNI and certificate verification, bounded connection reuse, environment proxies ignored, redirects refused
   - _Requirements: 11.1, 11.2, 11.11, 11.12, 11.13_
-- [ ] 1.4 Carry the spike's tests and mutation check over to the application module; add backend jobs to CI: `ruff`, `mypy`, `pytest` on SQLite and on a PostgreSQL service container
+- [x] 1.4 Carry the spike's tests and mutation check over to the application module; add backend jobs to CI: `ruff`, `mypy`, `pytest`, the mutation check and a server smoke test, on Linux and Windows. *The PostgreSQL service job moves to task 2.1: slice 1 has no database code to run against it.*
   - _Requirements: 11.1, 11.2, 11.11, 11.12, 11.13, 12.5_
 
 ## Slice 2 — Backend foundation and database migrations
 
 *Done when:* migrations apply on SQLite and PostgreSQL in CI; the management API rejects unauthenticated calls; credentials can be stored and are never returned.
 
-- [ ] 2.1 SQLAlchemy models and the initial Alembic migration; upgrade verified on SQLite and PostgreSQL
-  - _Requirements: 12.1_
+- [ ] 2.1 SQLAlchemy models and the initial Alembic migration; upgrade verified on SQLite and PostgreSQL; add the PostgreSQL service job to CI
+  - _Requirements: 12.1, 12.5_
 - [ ] 2.2 Admin-token dependency, CORS allowlist and the common error envelope
   - _Requirements: 11.4_
 - [ ] 2.3 Single-worker start-up check (`WEB_CONCURRENCY`, `REVENANT_WORKERS`, supervisor detection) that refuses to start with `unsupported_multi_worker`

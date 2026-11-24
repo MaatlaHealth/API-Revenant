@@ -1,6 +1,6 @@
 # Local Development
 
-> Stage 1 status: the repository contains specifications and scaffold only. The commands below describe the intended workflow and become runnable as Stages 2–4 land. Each section states the stage that enables it.
+> Status: slice 1 is implemented. The backend section below is runnable today; the frontend, demonstration and database sections describe the intended workflow and become runnable as later slices land.
 
 ## Prerequisites
 
@@ -29,27 +29,33 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 `.env` is ignored by Git. Never commit it.
 
-## Backend (Stage 2)
+## Backend
+
+Slice 1 is implemented: the backend starts, checks its configuration and serves `/healthz` and `/readyz`. There is no database yet.
 
 ```powershell
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-alembic upgrade head
+pip install -r requirements.lock.txt
+pip install --no-deps -e .
 uvicorn revenant.main:app --reload --port 8000 --no-access-log
 ```
 
-- API documentation: http://localhost:8000/api/v1/docs
 - Liveness: http://localhost:8000/healthz
+- Readiness: http://localhost:8000/readyz
+- API documentation: http://localhost:8000/api/v1/docs (empty until slice 3)
 
-Tests:
+Checks:
 
 ```powershell
+ruff check .
+mypy
 pytest
+python tests/mutation/outbound_mutation_check.py
 ```
 
-Run against PostgreSQL instead of SQLite by setting `TEST_DATABASE_URL`.
+The database commands (`alembic upgrade head`, `TEST_DATABASE_URL`) arrive with slice 2.
 
 ## Frontend (Stage 4)
 
