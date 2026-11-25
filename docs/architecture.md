@@ -1,6 +1,6 @@
 # API Revenant — Technical Architecture
 
-Status: Stage 1 design, revision 6. Implementation status: slices 1 to 3 (configuration, logging, health endpoints, outbound guard, database layer, admin authentication, credential storage, redaction, projects API, evidence import) are implemented and tested; everything else in this document is still design. See `README.md` for what exists.
+Status: Stage 1 design, revision 6. Implementation status: slices 1 to 4 (configuration, logging, health endpoints, outbound guard, database layer, admin authentication, credential storage, redaction, projects API, evidence import, reconstruction and mapping review) are implemented and tested; everything else in this document is still design. See `README.md` for what exists.
 
 ## 1. System overview
 
@@ -60,6 +60,8 @@ Dependency direction: `api → {evidence, reconstruction, adapter, verification,
 8. **Compile.** Only `approved` mappings are compiled into an Adapter Document. The compiler refuses to emit a route whose required replacement fields are not all satisfied.
 
 No LLM participates in the first release.
+
+**As implemented (slice 4).** A correspondence counts as confirmed by a fixture pair only if it holds in every paired recording in which either field appears; booleans, nulls and empty strings are not counted, and a correspondence resting on a single small number is classified `inferred`. A single recording with an informative value is enough for `observed`; the rationale of each mapping states how many recordings and distinct values support it. When several fields carry the same values and names do not settle it, nothing is proposed and a gap is recorded. Name-based rules are used only for fields that no recording shows. Enumeration values not recorded for an endpoint are filled from the same enumeration observed on another endpoint, and the mapping is then `inferred`. Review decisions belong to one reconstruction and are not carried over to the next.
 
 ## 4. Compatibility runtime
 

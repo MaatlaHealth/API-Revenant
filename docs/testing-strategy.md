@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Revision 9 (slices 1 to 3 implemented).
+Revision 10 (slices 1 to 4 implemented).
 
 This document covers two different things that must not be confused:
 
@@ -418,6 +418,24 @@ Listed in `security.md` (SSRF rows): address rules, DNS rebinding with a resolve
 | Projects | Slug generation and uniqueness, validation, pagination, workflow status, activity, deletion refused while running; eight unsafe replacement URLs rejected before saving |
 
 `backend/tests/mutation/evidence_mutation_check.py` weakens twenty-seven of these controls one at a time (for example: load YAML unsafely, keep credentials in stored fixtures, silently drop unparseable files, skip the outbound guard on the replacement URL).
+
+### Implemented so far (slice 4)
+
+| Area | Tests |
+|---|---|
+| Demonstration result | Exact counts on the demonstration evidence (55 mappings, 47 observed and 8 inferred; 11 gaps; 28 invariants; 27 behaviours) and the exact transformation of representative mappings: nested request fields, epoch-to-ISO conversion, array items, enumerations, route with path parameter, authentication, pagination, error rule and envelope |
+| Evidence behind proposals | Every mapping records references, rule, confidence and approval flag; every evidence reference of every mapping resolves to an imported file, fixture or fact; no mapping touches a credential carrier; every engine proposal passes the same validator as a human edit |
+| Confidence | Name matches are inferred; identity in both specifications and fixture correlation are observed; a correlation must hold in every recording; booleans, nulls and single small numbers do not count; ambiguity yields a gap, not a choice; fixtures that contradict a name match win |
+| Pairing | Recordings pair endpoints; similarity gives an inferred pair; below-threshold, tied and contested endpoints are left unpaired and reported |
+| Determinism | Two runs give identical output; a second project with the files imported in reverse order gives identical output; the pure engine is order-independent |
+| Staleness and inventories | Stale after import, current again when the evidence set is restored; no stale column exists; a completed inventory is unchanged by new evidence; added and removed behaviours and sizes reported; earlier reconstructions return `409 immutable` for every review action |
+| Review | Decisions append-only with actor, note and time; edits validated (eight invalid rules, credential headers, legacy route, unknown upstream, leaked credential value not echoed) and stored as superseding human mappings; bulk approval by filter takes observed mappings only and cannot be asked for inferred ones |
+| Operation effect | The engine never proposes read-only; unsafe method and specification marker give state-changing; safe methods give unknown; read-only needs a note and is refused on unsafe methods and against a marker; the method floor table; declarations audited |
+| Invariants | Stated in legacy terms only (no replacement field name appears in any definition; derivation refuses replacement contracts and gives the same result without them); two fixtures with different values for observed; inferred ones wait for approval; a contradicted pagination invariant is not emitted |
+| Inventory | Documented-without-evidence, gaps, unsupported bodies and unreadable legacy files are all counted; each gap is represented by exactly one behaviour; scope changes need a note, are audited and never remove a behaviour |
+| Access | All twenty routes require the admin token before the project is looked up; nothing of one project is reachable through another |
+
+`backend/tests/mutation/reconstruction_mutation_check.py` weakens forty-eight of these rules one at a time (for example: propose read-only for safe methods, drop the method floor, bulk-approve inferred mappings, store an edit without validating it, never report staleness, classify name matches as observed, break pairing ties by order).
 
 ### End-to-end acceptance test
 

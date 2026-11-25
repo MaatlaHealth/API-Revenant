@@ -51,6 +51,8 @@ A path addresses a value in a named scope: `<scope>:<pointer>`.
 | `query`, `path`, `header` | request | Legacy request parts. Header names are case-insensitive. |
 | `status` | response | Upstream status code. |
 | `request.body`, `request.query`, `request.path` | response | The original legacy request, for echoing values the replacement does not return. |
+| `item` | inside `each` | The current array element. |
+| `var` | error envelope | The variables set by the matching error rule. |
 
 Pointer grammar: `$` (root), `.name`, `[n]` (non-negative integer index). Wildcards are not allowed in paths; array iteration is done only with the `each` rule. Maximum depth 16.
 

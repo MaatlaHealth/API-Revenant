@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from revenant import __version__
-from revenant.api import credentials, evidence, projects
+from revenant.api import credentials, evidence, projects, reconstruction
 from revenant.api.errors import install_error_handlers
 from revenant.config import Settings, startup_problems
 from revenant.db.session import Database
@@ -81,6 +81,7 @@ def create_app(settings: Settings | None = None, *, supervised: bool | None = No
     app.add_middleware(RequestLogMiddleware)
     app.include_router(projects.router)
     app.include_router(evidence.router)
+    app.include_router(reconstruction.router)
     app.include_router(credentials.router)
 
     @app.get("/healthz", include_in_schema=False)

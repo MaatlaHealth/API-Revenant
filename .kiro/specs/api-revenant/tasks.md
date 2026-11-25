@@ -67,19 +67,19 @@ Rules for every slice:
 
 *Done when:* reconstruction of the demonstration evidence is deterministic and produces mappings, gaps, invariants, an inventory and operation-effect proposals; mappings and effects can be approved or rejected through the API.
 
-- [ ] 4.1 Normalised contract model and endpoint pairing
+- [x] 4.1 Normalised contract model and endpoint pairing
   - _Requirements: 3.1_
-- [ ] 4.2 Proposer rules (identity, normalised name, structural, fixture correlation, enum, auth, pagination, error shape) with confidence classification and evidence references
+- [x] 4.2 Proposer rules (identity, normalised name, structural, fixture correlation, enum, auth, pagination, error shape) with confidence classification and evidence references
   - _Requirements: 3.2, 3.3, 3.4_
-- [ ] 4.3 Gap detection; reconstruction records its evidence version and fingerprint; staleness by fingerprint comparison; determinism test
+- [x] 4.3 Gap detection; reconstruction records its evidence version and fingerprint; staleness by fingerprint comparison; determinism test
   - _Requirements: 3.5, 3.6, 3.7_
-- [ ] 4.4 Mapping review API: approve, reject, edit, bulk approve, audit records
+- [x] 4.4 Mapping review API: approve, reject, edit, bulk approve, audit records. *The rule models of the transformation language (`revenant/transform/model.py`) were written here, ahead of task 5.1, because an edited rule has to be validated. Review decisions are not carried over to a later reconstruction.*
   - _Requirements: 4.1, 4.2, 4.3_
-- [ ] 4.5 Operation effect: engine proposals (`state_changing` when a method is unsafe, otherwise `unknown`, never `read_only`); declaration API requiring a note; rejection of read-only on an unsafe method or against an explicit evidence marker; audit records
+- [x] 4.5 Operation effect: engine proposals (`state_changing` when a method is unsafe, otherwise `unknown`, never `read_only`); declaration API requiring a note; rejection of read-only on an unsafe method or against an explicit evidence marker; audit records
   - _Requirements: 4.5, 8.35_
-- [ ] 4.6 Legacy-only invariant derivation (echo, schema, pagination, error) with confidence and evidence; invariant review API
+- [x] 4.6 Legacy-only invariant derivation (echo, schema, pagination, error) with confidence and evidence; invariant review API
   - _Requirements: 8.4, 8.11_
-- [ ] 4.7 Behaviour inventory: deterministic enumeration (responses, auth, pagination, gaps, unsupported features, project-level behaviours), immutable per reconstruction, inventory difference against the previous reconstruction, scope marking API
+- [x] 4.7 Behaviour inventory: deterministic enumeration (responses, auth, pagination, gaps, unsupported features, project-level behaviours), immutable per reconstruction, inventory difference against the previous reconstruction, scope marking API
   - _Requirements: 8.14, 8.20, 3.8, 3.9_
 
 ## Slice 5 — Adapter compilation

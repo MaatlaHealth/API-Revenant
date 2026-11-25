@@ -74,7 +74,7 @@ One row per parsed specification: `evidence_file_id FK`, `project_id FK`, `side`
 | Column | Notes |
 |---|---|
 | id, endpoint_id FK | index `(endpoint_id, fact_type)` |
-| fact_type | `field`, `parameter`, `header`, `status_code`, `auth`, `pagination`, `error_shape`, `default`, `enum` |
+| fact_type | `field`, `parameter`, `header`, `status_code`, `auth`, `pagination`, `error_shape`, `effect` (an `x-revenant-effect` marker), `unsupported_content` (a non-JSON body) |
 | subject | Field path or parameter name |
 | value | JSON: type, required, default, enum values, etc. |
 | evidence_file_id FK | **not null** |
@@ -87,7 +87,7 @@ Every extracted fact has exactly one provenance row; the same fact supported by 
 `id`, `project_id FK`, `evidence_file_id FK`, `endpoint_id FK nullable`, `side` (`legacy` = historical fixture; `replacement` = paired recording), `pair_with` FK nullable to a legacy fixture (set on replacement recordings), `name`, `request` JSON (method, path, query, headers, body), `expected_response` JSON (status, headers, body), `content_sha256`, `recorded_at nullable`, `normalisation` JSON (per-fixture overrides). Credential headers are redacted at import; the original value is never stored. Fixtures are immutable after import: verification has no write path to this table.
 
 ### reconstructions
-One row per analysis run: `project_id FK`, `status`, `engine_version`, `summary` JSON (counts by confidence and category), `evidence_version` and `evidence_fingerprint` (the evidence set it analysed), `evidence_file_ids` JSON (the exact files), `inventory_size`, `inventory_fingerprint`, `previous_reconstruction_id FK nullable`, `inventory_diff` JSON (behaviours added and removed relative to the previous reconstruction).
+One row per analysis run: `project_id FK`, `sequence` (1, 2, 3 … per project; **unique** `(project_id, sequence)`), `status`, `engine_version`, `created_by`, `summary` JSON (counts by confidence and category), `report` JSON (the endpoint pairs, both contracts as analysed, and their differences), `evidence_version` and `evidence_fingerprint` (the evidence set it analysed), `evidence_file_ids` JSON (the exact files), `inventory_size`, `inventory_fingerprint`, `previous_reconstruction_id FK nullable`, `inventory_diff` JSON (behaviours added and removed relative to the previous reconstruction).
 
 A reconstruction is **stale** when its `evidence_fingerprint` differs from the project's current one. Staleness is computed, not stored. A reconstruction and everything under it (mappings, invariants, gaps, behaviours) is immutable once completed, apart from review decisions recorded in their own append-only tables. A reconstruction referenced by a verification run is never deleted.
 
@@ -95,6 +95,7 @@ A reconstruction is **stale** when its `evidence_fingerprint` differs from the p
 | Column | Notes |
 |---|---|
 | id, project_id FK, reconstruction_id FK | index `(project_id, status)` |
+| key, position | `key` identifies what is mapped (for example `field:POST /v1/charges:request.body:$.customer_id`) and is the same in every reconstruction of the same evidence; an edit keeps the key of the proposal it supersedes. `position` is the engine's output order |
 | legacy_endpoint_id FK, replacement_endpoint_id FK | nullable for document-level mappings (auth, error envelope) |
 | category | `endpoint`, `request_field`, `response_field`, `query`, `header`, `auth`, `pagination`, `status_code`, `error`, `enum`, `type`, `effect` |
 | legacy_ref, replacement_ref | Path or behaviour description |
@@ -102,8 +103,8 @@ A reconstruction is **stale** when its `evidence_fingerprint` differs from the p
 | confidence | `observed`, `inferred` |
 | rule_name | Which proposer produced it |
 | rationale | Human-readable explanation generated from the rule |
-| evidence_refs | JSON list of `endpoint_facts` / fixture ids |
-| requires_approval | bool; always true for `inferred` |
+| evidence_refs | JSON list of references. A fact is referenced by evidence file id and locator, a fixture by its id and name, so a reference stays valid when fact rows are rebuilt. Empty for a human edit |
+| requires_approval | bool; always true for `inferred`. Every mapping must be approved before it can be compiled; this flag means it must be approved individually and is never included in bulk approval by filter |
 | status | `proposed`, `approved`, `rejected`, `superseded` |
 | origin | `engine`, `human` |
 | supersedes_id FK nullable | Set when a human edits a proposal |
@@ -112,7 +113,7 @@ A reconstruction is **stale** when its `evidence_fingerprint` differs from the p
 Append-only: `mapping_id FK`, `decision` (`approved`/`rejected`/`edited`), `actor`, `note`, `created_at`.
 
 ### gaps — unresolved behaviour
-`project_id FK`, `reconstruction_id FK`, `endpoint_id FK nullable`, `category`, `title`, `description`, `evidence_refs` JSON (what *is* known), `missing` (what evidence would resolve it), `severity` (`blocking` if it prevents compiling a route, else `advisory`), `resolution` (`open`, `accepted_risk`, `resolved_by_evidence`).
+`project_id FK`, `reconstruction_id FK`, `key` (**unique** per reconstruction), `endpoint_id FK nullable`, `endpoint_ref` (the legacy operation as text, so it outlives the endpoint row), `behaviour_key` (the inventory behaviour that stands for this gap: an existing one, such as the response for a documented status code with no example, or the gap's own), `resolution_note`, `category`, `title`, `description`, `evidence_refs` JSON (what *is* known), `missing` (what evidence would resolve it), `severity` (`blocking` if it prevents compiling a route, else `advisory`), `resolution` (`open`, `accepted_risk`, `resolved_by_evidence`).
 
 ### adapter_versions
 `project_id FK`, `version` int — **unique** `(project_id, version)`, `document` JSON (the RTL document), `document_sha256`, `mapping_ids` JSON, `compiled_by`, `notes`. Immutable after insert. Each route in the document carries `effect` (`read_only`, `state_changing`, `unknown`), compiled from the approved `effect` mapping for that route; a route with no approved declaration is `state_changing` if either method is unsafe and `unknown` otherwise. Verification reads operation effects only from the adapter version a run is pinned to.
@@ -143,13 +144,13 @@ No column holds the key itself. Several rows may be `active` per project.
 No plaintext column. The API never returns values. The two credential tables are deliberately separate: they have different storage forms and no code path reads both for the same purpose.
 
 ### invariants — legacy-only behavioural invariants
-`project_id FK`, `reconstruction_id FK`, `endpoint_id FK`, `kind` (`echo`, `schema`, `pagination`, `error`), `definition` JSON (legacy paths only — never a replacement path or mapping id), `confidence` (`observed`, `inferred`), `evidence_refs` JSON, `status` (`active`, `proposed`, `rejected`). An `inferred` invariant must be approved before verification uses it.
+`project_id FK`, `reconstruction_id FK`, `key` (**unique** per reconstruction), `endpoint_id FK`, `endpoint_ref`, `kind` (`echo`, `schema`, `pagination`, `error`), `definition` JSON (legacy paths only — never a replacement path or mapping id), `confidence` (`observed`, `inferred`), `evidence_refs` JSON, `status` (`active`, `proposed`, `rejected`). An `inferred` invariant must be approved before verification uses it.
 
 ### behaviours — the behaviour inventory
 | Column | Notes |
 |---|---|
 | id, project_id FK, reconstruction_id FK | index `(project_id, reconstruction_id)` |
-| endpoint_id FK nullable | |
+| endpoint_id FK nullable, endpoint_ref | `endpoint_ref` is the legacy operation as text and decides the grouping; null marks a project-level behaviour |
 | kind | `response` (endpoint + status code), `auth`, `pagination_traversal`, `pagination_termination`, `gap`, `unsupported` |
 | key | Stable deterministic key, e.g. `POST /v1/charges → 201`; **unique** `(reconstruction_id, key)` |
 | description | |

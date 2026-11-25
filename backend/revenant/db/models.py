@@ -257,3 +257,196 @@ class Fixture(Base):
     content_sha256: Mapped[str] = mapped_column(String(64))
     recorded_at: Mapped[str | None] = mapped_column(String(40))
     normalisation: Mapped[dict[str, Any]] = mapped_column(default=dict)
+
+
+# ---- slice 4: reconstruction ---------------------------------------------------------
+
+MAPPING_CATEGORIES = (
+    "endpoint", "request_field", "response_field", "query", "header", "auth", "pagination",
+    "status_code", "error", "enum", "type", "effect",
+)
+CONFIDENCES = ("observed", "inferred")
+MAPPING_STATUSES = ("proposed", "approved", "rejected", "superseded")
+MAPPING_ORIGINS = ("engine", "human")
+MAPPING_DECISIONS = ("approved", "rejected", "edited")
+GAP_SEVERITIES = ("blocking", "advisory")
+GAP_RESOLUTIONS = ("open", "accepted_risk", "resolved_by_evidence")
+INVARIANT_KINDS = ("echo", "schema", "pagination", "error")
+INVARIANT_STATUSES = ("active", "proposed", "rejected")
+BEHAVIOUR_KINDS = (
+    "response", "auth", "pagination_traversal", "pagination_termination", "gap", "unsupported",
+)
+BEHAVIOUR_SCOPES = ("in_scope", "out_of_scope")
+
+
+class Reconstruction(Base):
+    """One analysis of one evidence set. Immutable once written, apart from the
+    review decisions recorded against its mappings, gaps, invariants and scopes."""
+
+    __tablename__ = "reconstructions"
+    __table_args__ = (UniqueConstraint("project_id", "sequence"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    sequence: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16), default="completed")
+    engine_version: Mapped[str] = mapped_column(String(16))
+    summary: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    # Endpoint pairs, the two contracts side by side, and their differences.
+    report: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    evidence_version: Mapped[int] = mapped_column(Integer)
+    evidence_fingerprint: Mapped[str] = mapped_column(String(64))
+    evidence_file_ids: Mapped[list[Any]] = mapped_column(PortableJSON, default=list)
+    inventory_size: Mapped[int] = mapped_column(Integer)
+    inventory_fingerprint: Mapped[str] = mapped_column(String(64))
+    previous_reconstruction_id: Mapped[str | None] = mapped_column(
+        ForeignKey("reconstructions.id", ondelete="SET NULL")
+    )
+    inventory_diff: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    created_by: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Mapping(Base):
+    __tablename__ = "mappings"
+    __table_args__ = (
+        CheckConstraint(_in("category", MAPPING_CATEGORIES), name="category"),
+        CheckConstraint(_in("confidence", CONFIDENCES), name="confidence"),
+        CheckConstraint(_in("status", MAPPING_STATUSES), name="status"),
+        CheckConstraint(_in("origin", MAPPING_ORIGINS), name="origin"),
+        Index("ix_mappings_project_id_status", "project_id", "status"),
+        Index("ix_mappings_reconstruction_id", "reconstruction_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    reconstruction_id: Mapped[str] = mapped_column(
+        ForeignKey("reconstructions.id", ondelete="CASCADE")
+    )
+    # Deterministic identity of what is being mapped, stable across reconstructions.
+    key: Mapped[str] = mapped_column(String(700))
+    position: Mapped[int] = mapped_column(Integer)
+    legacy_endpoint_id: Mapped[str | None] = mapped_column(
+        ForeignKey("endpoints.id", ondelete="SET NULL")
+    )
+    replacement_endpoint_id: Mapped[str | None] = mapped_column(
+        ForeignKey("endpoints.id", ondelete="SET NULL")
+    )
+    category: Mapped[str] = mapped_column(String(32))
+    legacy_ref: Mapped[str] = mapped_column(String(700))
+    replacement_ref: Mapped[str] = mapped_column(String(700))
+    transformation: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    confidence: Mapped[str] = mapped_column(String(16))
+    rule_name: Mapped[str] = mapped_column(String(64))
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    evidence_refs: Mapped[list[Any]] = mapped_column(PortableJSON, default=list)
+    requires_approval: Mapped[bool] = mapped_column(Boolean)
+    status: Mapped[str] = mapped_column(String(16), default="proposed")
+    origin: Mapped[str] = mapped_column(String(16), default="engine")
+    supersedes_id: Mapped[str | None] = mapped_column(
+        ForeignKey("mappings.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class MappingDecision(Base):
+    """Append-only record of review decisions."""
+
+    __tablename__ = "mapping_decisions"
+    __table_args__ = (
+        CheckConstraint(_in("decision", MAPPING_DECISIONS), name="decision"),
+        Index("ix_mapping_decisions_mapping_id", "mapping_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    mapping_id: Mapped[str] = mapped_column(ForeignKey("mappings.id", ondelete="CASCADE"))
+    decision: Mapped[str] = mapped_column(String(16))
+    actor: Mapped[str] = mapped_column(String(64))
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Gap(Base):
+    """Behaviour the evidence does not establish. Never turned into a mapping."""
+
+    __tablename__ = "gaps"
+    __table_args__ = (
+        UniqueConstraint("reconstruction_id", "key"),
+        CheckConstraint(_in("severity", GAP_SEVERITIES), name="severity"),
+        CheckConstraint(_in("resolution", GAP_RESOLUTIONS), name="resolution"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    reconstruction_id: Mapped[str] = mapped_column(
+        ForeignKey("reconstructions.id", ondelete="CASCADE")
+    )
+    key: Mapped[str] = mapped_column(String(700))
+    endpoint_id: Mapped[str | None] = mapped_column(ForeignKey("endpoints.id", ondelete="SET NULL"))
+    # "METHOD path" of the legacy endpoint, kept as text so it survives the endpoint row.
+    endpoint_ref: Mapped[str | None] = mapped_column(String(600))
+    category: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(500))
+    description: Mapped[str] = mapped_column(Text, default="")
+    evidence_refs: Mapped[list[Any]] = mapped_column(PortableJSON, default=list)
+    missing: Mapped[str] = mapped_column(Text, default="")
+    severity: Mapped[str] = mapped_column(String(16))
+    # The inventory behaviour that represents this gap.
+    behaviour_key: Mapped[str] = mapped_column(String(700))
+    resolution: Mapped[str] = mapped_column(String(32), default="open")
+    resolution_note: Mapped[str] = mapped_column(Text, default="")
+
+
+class Invariant(Base):
+    """A legacy-only behavioural invariant. Never refers to the replacement."""
+
+    __tablename__ = "invariants"
+    __table_args__ = (
+        UniqueConstraint("reconstruction_id", "key"),
+        CheckConstraint(_in("kind", INVARIANT_KINDS), name="kind"),
+        CheckConstraint(_in("confidence", CONFIDENCES), name="confidence"),
+        CheckConstraint(_in("status", INVARIANT_STATUSES), name="status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    reconstruction_id: Mapped[str] = mapped_column(
+        ForeignKey("reconstructions.id", ondelete="CASCADE")
+    )
+    key: Mapped[str] = mapped_column(String(700))
+    endpoint_id: Mapped[str | None] = mapped_column(ForeignKey("endpoints.id", ondelete="SET NULL"))
+    endpoint_ref: Mapped[str] = mapped_column(String(600))
+    kind: Mapped[str] = mapped_column(String(16))
+    definition: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    confidence: Mapped[str] = mapped_column(String(16))
+    evidence_refs: Mapped[list[Any]] = mapped_column(PortableJSON, default=list)
+    status: Mapped[str] = mapped_column(String(16))
+
+
+class Behaviour(Base):
+    """One row of a behaviour inventory. The set of rows for a reconstruction
+    never changes; only ``scope`` can be set, and that is audited."""
+
+    __tablename__ = "behaviours"
+    __table_args__ = (
+        UniqueConstraint("reconstruction_id", "key"),
+        CheckConstraint(_in("kind", BEHAVIOUR_KINDS), name="kind"),
+        CheckConstraint(_in("scope", BEHAVIOUR_SCOPES), name="scope"),
+        Index("ix_behaviours_project_id_reconstruction_id", "project_id", "reconstruction_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    reconstruction_id: Mapped[str] = mapped_column(
+        ForeignKey("reconstructions.id", ondelete="CASCADE")
+    )
+    endpoint_id: Mapped[str | None] = mapped_column(ForeignKey("endpoints.id", ondelete="SET NULL"))
+    # Null marks a project-level behaviour.
+    endpoint_ref: Mapped[str | None] = mapped_column(String(600))
+    kind: Mapped[str] = mapped_column(String(32))
+    key: Mapped[str] = mapped_column(String(700))
+    description: Mapped[str] = mapped_column(Text, default="")
+    evidence_refs: Mapped[list[Any]] = mapped_column(PortableJSON, default=list)
+    scope: Mapped[str] = mapped_column(String(16), default="in_scope")
+    scope_note: Mapped[str] = mapped_column(Text, default="")
+    unsupported_reason: Mapped[str | None] = mapped_column(Text)

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from revenant import audit
 from revenant.api.deps import AdminActor, CurrentProject, DbSession, get_settings, require_admin
 from revenant.config import Settings
-from revenant.db.models import AuditRecord, Project
+from revenant.db.models import AuditRecord, Project, Reconstruction
 from revenant.errors import Conflict, OutboundBlocked, UnsafeUrl
 from revenant.evidence.service import EvidenceService
 from revenant.security.outbound import Resolver, check_destination, system_resolver
@@ -109,7 +109,8 @@ def validate_base_url(url: str, settings: Settings, resolver: Resolver) -> str:
 
 
 def workflow(
-    project: Project, counts: dict[str, int], missing_codes: set[str]
+    project: Project, counts: dict[str, int], missing_codes: set[str],
+    reconstruction: Reconstruction | None = None,
 ) -> list[WorkflowStep]:
     """Which steps are done and what blocks the next one. Computed from stored data."""
     legacy_spec = "no_specification:legacy" not in missing_codes
@@ -129,16 +130,23 @@ def workflow(
         WorkflowStep(key="fixtures", title="Import historical fixtures",
                      complete=fixtures, available=True, blocked_by=None),
     ]
-    not_built = "Not available in this build yet."
+    # Stale is computed by comparing fingerprints; it is never stored.
+    current = (reconstruction is not None
+               and reconstruction.evidence_fingerprint == project.evidence_fingerprint)
     steps.append(WorkflowStep(
-        key="reconstruction", title="Reconstruct and review mappings", complete=False,
-        available=False,
-        blocked_by=blocker((legacy_spec, "Import the legacy specification first."),
-                           (replacement_spec, "Import the replacement specification first."),
-                           (fixtures, "Import historical fixtures first."),
-                           (not evidence_ready, not_built))))
-    for key, title in (("adapter", "Compile the adapter"), ("verification", "Verify"),
-                       ("runtime", "Run the compatibility runtime")):
+        key="reconstruction", title="Reconstruct and review mappings",
+        complete=evidence_ready and current, available=evidence_ready,
+        blocked_by=blocker(
+            (legacy_spec, "Import the legacy specification first."),
+            (replacement_spec, "Import the replacement specification first."),
+            (fixtures, "Import historical fixtures first."),
+            (reconstruction is None or current,
+             "Evidence has changed since the last reconstruction. Run it again."))))
+    steps.append(WorkflowStep(
+        key="adapter", title="Compile the adapter", complete=False, available=False,
+        blocked_by="Not available in this build yet." if evidence_ready and current
+        else "Requires the previous step."))
+    for key, title in (("verification", "Verify"), ("runtime", "Run the compatibility runtime")):
         steps.append(WorkflowStep(key=key, title=title, complete=False, available=False,
                                   blocked_by="Requires the previous step."))
     return steps
@@ -147,12 +155,15 @@ def workflow(
 def describe(project: Project, service: EvidenceService) -> ProjectOut:
     counts = service.counts(project.id)
     codes = {f"{item.code}:{item.side}" for item in service.missing(project.id)}
+    latest = service.session.scalar(
+        select(Reconstruction).where(Reconstruction.project_id == project.id)
+        .order_by(Reconstruction.sequence.desc()).limit(1))
     return ProjectOut(
         id=project.id, slug=project.slug, name=project.name, description=project.description,
         legacy_name=project.legacy_name, replacement_name=project.replacement_name,
         replacement_base_url=project.replacement_base_url, is_demo=project.is_demo,
         status=project.status, evidence_version=project.evidence_version, evidence=counts,
-        workflow=workflow(project, counts, codes),
+        workflow=workflow(project, counts, codes, latest),
         created_at=project.created_at, updated_at=project.updated_at,
     )
 

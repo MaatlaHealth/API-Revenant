@@ -81,12 +81,14 @@ A **paired replacement recording** uses the same format, uploaded with `side=rep
 | `GET /projects/{id}/mappings/{mapping_id}` | Detail with resolved evidence references. |
 | `POST /projects/{id}/mappings/{mapping_id}/approve` | Body: `note?`. |
 | `POST /projects/{id}/mappings/{mapping_id}/reject` | Body: `note?`. |
-| `PUT /projects/{id}/mappings/{mapping_id}` | Edit the transformation. Creates a superseding `origin: human` mapping after validating the rule. |
-| `POST /projects/{id}/mappings/bulk-approve` | Body: `ids` **or** `filter: { confidence: "observed" }`. Inferred mappings are never bulk-approved by filter; they must be listed by id. |
+| `PUT /projects/{id}/mappings/{mapping_id}` | Body: `transformation`, `note?`. Validates the rule against the rule models and creates a superseding `origin: human` mapping in status `proposed`, classified `inferred` with no evidence references; it must then be approved. `400` lists every problem. Effect mappings are not edited here. |
+| `POST /projects/{id}/mappings/bulk-approve` | Body: `ids` **or** `filter: { confidence: "observed", category? }`, and `note?`. Inferred mappings are never bulk-approved by filter; they must be listed by id. Returns the ids approved and, for `ids`, those skipped with the reason. |
 | `GET /projects/{id}/gaps` | Unresolved behaviours. |
 | `PATCH /projects/{id}/gaps/{gap_id}` | Set `resolution` (`accepted_risk` with a required note). |
-| `GET /projects/{id}/operations` | Every paired operation with its legacy and replacement methods, its declared effect (`read_only`, `state_changing`, `unknown`), the effective effect after the method floor, and who declared it. |
+| `GET /projects/{id}/operations` | (`operation_id` is the id of the legacy endpoint.) Every paired operation with its legacy and replacement methods, its declared effect (`read_only`, `state_changing`, `unknown`), the effective effect after the method floor, and who declared it. |
 | `PUT /projects/{id}/operations/{operation_id}/effect` | Body: `effect`, `note` (required). Creates an `effect` mapping decision. Declaring `read_only` is rejected with `400` if either method is not `GET`, `HEAD` or `OPTIONS`, or if evidence marks the operation state-changing. Declaring `state_changing` is always accepted. Written to the audit log. Takes effect in the next compiled adapter version. |
+
+Review applies to the latest reconstruction only. A mapping, gap, invariant or behaviour of an earlier reconstruction is read-only: an attempt to decide or change it returns `409 immutable`. Decisions are not carried over to a new reconstruction, because it analysed different evidence. Mapping, gap and invariant lists return the latest reconstruction and accept `limit` and `offset`.
 
 ## Adapters
 

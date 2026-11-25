@@ -88,7 +88,11 @@ def test_project_summary_reflects_the_imported_evidence(
     assert steps["legacy_specification"]["complete"] is True
     assert steps["replacement_specification"]["complete"] is True
     assert steps["fixtures"]["complete"] is True
-    assert steps["reconstruction"]["blocked_by"] == "Not available in this build yet."
+    # Reconstruction can now be run; it has not been, so later steps wait for it.
+    assert steps["reconstruction"] == {
+        "key": "reconstruction", "title": "Reconstruct and review mappings",
+        "complete": False, "available": True, "blocked_by": None}
+    assert steps["adapter"]["blocked_by"] == "Requires the previous step."
 
 
 def test_endpoints_are_listed_per_side(
