@@ -71,6 +71,21 @@ class NotConfigured(ApiError):
     code = "not_configured"
 
 
+class PayloadTooLarge(ApiError):
+    status_code = 413
+    code = "payload_too_large"
+
+
+class UnsupportedEvidence(ApiError):
+    status_code = 400
+    code = "unsupported_evidence"
+
+
+class UnsafeUrl(ApiError):
+    status_code = 400
+    code = "unsafe_url"
+
+
 class DatabaseUnavailable(ApiError):
     status_code = 503
     code = "database_unavailable"

@@ -1,0 +1,188 @@
+{
+  "revenant_fixtures": "1.0",
+  "description": "Recorded NovaPay exchanges, each paired with the GravePay fixture for the equivalent operation. NovaPay is a fictional service created for the API Revenant demonstration; this is deterministic sample data.",
+  "fixtures": [
+    {
+      "name": "novapay: create payment - ZAR",
+      "pair_with": "create charge - ZAR",
+      "request": {
+        "method": "POST",
+        "path": "/payments",
+        "headers": { "Authorization": "[REDACTED]", "Content-Type": "application/json" },
+        "body": { "customer_id": "C210", "transaction": { "value": 500, "currency_code": "ZAR" }, "external_ref": "order-7781" }
+      },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "payment_id": "P-2001", "customer_id": "C210",
+          "transaction": { "value": 500, "currency_code": "ZAR" },
+          "state": "COMPLETED", "external_ref": "order-7781", "created_at": 1741944067
+        }
+      }
+    },
+    {
+      "name": "novapay: create payment - USD",
+      "pair_with": "create charge - USD",
+      "request": {
+        "method": "POST",
+        "path": "/payments",
+        "headers": { "Authorization": "[REDACTED]", "Content-Type": "application/json" },
+        "body": { "customer_id": "C311", "transaction": { "value": 1250, "currency_code": "USD" } }
+      },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "payment_id": "P-2002", "customer_id": "C311",
+          "transaction": { "value": 1250, "currency_code": "USD" },
+          "state": "COMPLETED", "created_at": 1741944160
+        }
+      }
+    },
+    {
+      "name": "novapay: create payment - currency not supported",
+      "pair_with": "create charge - invalid currency",
+      "request": {
+        "method": "POST",
+        "path": "/payments",
+        "headers": { "Authorization": "[REDACTED]", "Content-Type": "application/json" },
+        "body": { "customer_id": "C210", "transaction": { "value": 500, "currency_code": "XXX" } }
+      },
+      "response": {
+        "status": 422,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "type": "https://docs.novapay.demo/problems/currency-not-supported",
+          "title": "Currency not supported", "status": 422,
+          "detail": "Currency XXX is not supported.", "code": "CURRENCY_NOT_SUPPORTED"
+        }
+      }
+    },
+    {
+      "name": "novapay: retrieve payment",
+      "pair_with": "retrieve charge",
+      "request": {
+        "method": "GET",
+        "path": "/payments/P-1002",
+        "headers": { "Authorization": "[REDACTED]" }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "payment_id": "P-1002", "customer_id": "C102",
+          "transaction": { "value": 500, "currency_code": "ZAR" },
+          "state": "COMPLETED", "created_at": 1740907800
+        }
+      }
+    },
+    {
+      "name": "novapay: retrieve payment - not found",
+      "pair_with": "retrieve charge - not found",
+      "request": {
+        "method": "GET",
+        "path": "/payments/P-9999",
+        "headers": { "Authorization": "[REDACTED]" }
+      },
+      "response": {
+        "status": 404,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "type": "https://docs.novapay.demo/problems/payment-not-found",
+          "title": "Payment not found", "status": 404,
+          "detail": "No such resource: P-9999.", "code": "PAYMENT_NOT_FOUND"
+        }
+      }
+    },
+    {
+      "name": "novapay: list payments - page 1",
+      "pair_with": "list charges - page 1",
+      "request": {
+        "method": "GET",
+        "path": "/payments",
+        "query": { "cursor": "eyJwYWdlIjoxfQ==", "page_size": 2 },
+        "headers": { "Authorization": "[REDACTED]" }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "items": [
+            { "payment_id": "P-1001", "customer_id": "C101", "transaction": { "value": 250, "currency_code": "ZAR" }, "state": "COMPLETED", "created_at": 1740816000 },
+            { "payment_id": "P-1002", "customer_id": "C102", "transaction": { "value": 500, "currency_code": "ZAR" }, "state": "COMPLETED", "created_at": 1740907800 }
+          ],
+          "next_cursor": "eyJwYWdlIjoyfQ=="
+        }
+      }
+    },
+    {
+      "name": "novapay: list payments - page 2",
+      "pair_with": "list charges - page 2",
+      "request": {
+        "method": "GET",
+        "path": "/payments",
+        "query": { "cursor": "eyJwYWdlIjoyfQ==", "page_size": 2 },
+        "headers": { "Authorization": "[REDACTED]" }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "items": [
+            { "payment_id": "P-1003", "customer_id": "C103", "transaction": { "value": 1200, "currency_code": "USD" }, "state": "PROCESSING", "created_at": 1740996900 },
+            { "payment_id": "P-1004", "customer_id": "C104", "transaction": { "value": 75, "currency_code": "EUR" }, "state": "DECLINED", "created_at": 1741088700 }
+          ],
+          "next_cursor": "eyJwYWdlIjozfQ=="
+        }
+      }
+    },
+    {
+      "name": "novapay: create refund",
+      "pair_with": "refund charge",
+      "request": {
+        "method": "POST",
+        "path": "/payments/P-1005/refunds",
+        "headers": { "Authorization": "[REDACTED]", "Content-Type": "application/json" },
+        "body": { "value": 1000 }
+      },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "body": { "refund_id": "R-3001", "payment_id": "P-1005", "value": 1000, "state": "COMPLETED" }
+      }
+    },
+    {
+      "name": "novapay: retrieve payment - no credentials",
+      "pair_with": "retrieve charge - no credentials",
+      "request": {
+        "method": "GET",
+        "path": "/payments/P-1001",
+        "headers": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "type": "https://docs.novapay.demo/problems/unauthorized",
+          "title": "Unauthorized", "status": 401,
+          "detail": "Missing or invalid credentials.", "code": "UNAUTHORIZED"
+        }
+      }
+    },
+    {
+      "name": "novapay: payment receipt",
+      "pair_with": "charge receipt",
+      "request": {
+        "method": "GET",
+        "path": "/payments/P-1002/receipt",
+        "headers": { "Authorization": "[REDACTED]" }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": { "payment_id": "P-1002", "receipt_no": "RCPT-1002", "receipt_issued_at": 1740907860 }
+      }
+    }
+  ]
+}

@@ -23,6 +23,9 @@ dependencies = [
   "alembic>=1.13,<2",
   "psycopg[binary]>=3.2,<4",
   "cryptography>=43",
+  # Slice 3: evidence import.
+  "pyyaml>=6.0,<7",
+  "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +33,7 @@ dev = [
   "pytest>=8.3",
   "ruff>=0.6",
   "mypy>=1.11",
+  "types-PyYAML",
 ]
 
 [tool.setuptools.packages.find]

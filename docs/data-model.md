@@ -48,10 +48,10 @@ instance_lease   (single row, not project-scoped)
 |---|---|---|
 | id, project_id FK | | index `(project_id, created_at)` |
 | side | string | `legacy`, `replacement` |
-| kind | string | `openapi`, `swagger`, `json_schema`, `fixtures`, `markdown`, `manual_example` |
+| kind | string | `openapi`, `swagger`, `json_schema`, `fixtures`, `markdown`, `manual_example`, `unknown` (a file that could not be read or recognised; stored with its report) |
 | filename, content_type, size_bytes | | |
 | sha256 | string(64) | **unique** `(project_id, sha256)` prevents duplicate imports |
-| content | large binary | Raw bytes as uploaded |
+| content | large binary | Raw bytes as uploaded, except for fixture files, where the redacted form is stored so uploaded credentials are not kept. `sha256` is always of the upload |
 | parse_status | string | `parsed`, `partial`, `failed`, `unsupported` |
 | parse_report | JSON | Counts, warnings, and every item that was rejected with the reason |
 | deleted_at | timestamp, nullable | Soft delete. A removed file leaves the current evidence set but its row and content are retained so that historical reconstructions and runs remain reproducible |

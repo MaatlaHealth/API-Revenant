@@ -1,0 +1,262 @@
+# GravePay is a FICTIONAL payment API created for the API Revenant demonstration.
+# It is not a real payment provider. No real payments or customer data are involved.
+openapi: 3.0.3
+info:
+  title: GravePay API (fictional, discontinued)
+  version: "1.4"
+  description: >
+    The legacy contract of the demonstration. GravePay is imagined to have been
+    switched off; this document and a set of recorded exchanges are what remains.
+servers:
+  - url: http://api.gravepay.demo:8000
+security:
+  - ApiKey: []
+paths:
+  /v1/charges:
+    post:
+      operationId: createCharge
+      summary: Create a charge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargeRequest"
+      responses:
+        "201":
+          description: The charge was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Charge"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          description: Too many requests. The response body is not documented.
+    get:
+      operationId: listCharges
+      summary: List charges, newest last
+      parameters:
+        - name: page
+          in: query
+          description: Page number, starting at 1.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: One page of charges.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargeList"
+        "401":
+          $ref: "#/components/responses/Error"
+  /v1/charges/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ChargeId"
+    get:
+      operationId: getCharge
+      summary: Retrieve a charge
+      responses:
+        "200":
+          description: The charge.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Charge"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /v1/charges/{id}/refund:
+    parameters:
+      - $ref: "#/components/parameters/ChargeId"
+    post:
+      operationId: refundCharge
+      summary: Refund all or part of a charge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: integer
+                  minimum: 1
+      responses:
+        "201":
+          description: The refund was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refund"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: The charge cannot be refunded. The error code is not documented.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/charges/{id}/receipt:
+    parameters:
+      - $ref: "#/components/parameters/ChargeId"
+    get:
+      operationId: getReceipt
+      summary: Fetch the receipt for a charge
+      responses:
+        "200":
+          description: The receipt.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+        "404":
+          $ref: "#/components/responses/Error"
+  /v1/charges/{id}/events:
+    parameters:
+      - $ref: "#/components/parameters/ChargeId"
+    get:
+      operationId: listChargeEvents
+      summary: List the events recorded for a charge
+      responses:
+        "200":
+          description: The events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Event"
+components:
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  parameters:
+    ChargeId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Error:
+      description: An error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    ChargeRequest:
+      type: object
+      required: [customer, amount, currency]
+      properties:
+        customer:
+          type: string
+        amount:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        reference:
+          type: string
+    Charge:
+      type: object
+      required: [id, customer, amount, currency, status, created]
+      properties:
+        id:
+          type: string
+        customer:
+          type: string
+        amount:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [succeeded, failed, pending]
+        reference:
+          type: string
+        created:
+          type: string
+          format: date-time
+    ChargeList:
+      type: object
+      required: [data, page, limit, has_more]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Charge"
+        page:
+          type: integer
+        limit:
+          type: integer
+        has_more:
+          type: boolean
+    Refund:
+      type: object
+      required: [id, charge, amount, status]
+      properties:
+        id:
+          type: string
+        charge:
+          type: string
+        amount:
+          type: integer
+        status:
+          type: string
+          enum: [succeeded, failed, pending]
+    Receipt:
+      type: object
+      required: [charge, receipt_number, issued]
+      properties:
+        charge:
+          type: string
+        receipt_number:
+          type: string
+        issued:
+          type: string
+          format: date-time
+    Event:
+      type: object
+      required: [type, at]
+      properties:
+        type:
+          type: string
+        at:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string

@@ -1,0 +1,177 @@
+{
+  "revenant_fixtures": "1.0",
+  "description": "Recorded GravePay exchanges. GravePay is a fictional service created for the API Revenant demonstration; this is deterministic sample data, not real payment or customer data.",
+  "fixtures": [
+    {
+      "name": "create charge - ZAR",
+      "recorded_at": "2025-03-14T09:21:07Z",
+      "request": {
+        "method": "POST",
+        "path": "/v1/charges",
+        "headers": { "X-API-Key": "[REDACTED]", "Content-Type": "application/json" },
+        "body": { "customer": "C210", "amount": 500, "currency": "ZAR", "reference": "order-7781" }
+      },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "id": "P-2001", "customer": "C210", "amount": 500, "currency": "ZAR",
+          "status": "succeeded", "reference": "order-7781", "created": "2025-03-14T09:21:07Z"
+        }
+      },
+      "variable_fields": ["$.id", "$.created"]
+    },
+    {
+      "name": "create charge - USD",
+      "recorded_at": "2025-03-14T09:22:40Z",
+      "request": {
+        "method": "POST",
+        "path": "/v1/charges",
+        "headers": { "X-API-Key": "[REDACTED]", "Content-Type": "application/json" },
+        "body": { "customer": "C311", "amount": 1250, "currency": "USD" }
+      },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "id": "P-2002", "customer": "C311", "amount": 1250, "currency": "USD",
+          "status": "succeeded", "created": "2025-03-14T09:22:40Z"
+        }
+      },
+      "variable_fields": ["$.id", "$.created"]
+    },
+    {
+      "name": "create charge - invalid currency",
+      "recorded_at": "2025-03-14T09:25:02Z",
+      "request": {
+        "method": "POST",
+        "path": "/v1/charges",
+        "headers": { "X-API-Key": "[REDACTED]", "Content-Type": "application/json" },
+        "body": { "customer": "C210", "amount": 500, "currency": "XXX" }
+      },
+      "response": {
+        "status": 400,
+        "headers": { "Content-Type": "application/json" },
+        "body": { "error": { "code": "invalid_currency", "message": "Currency XXX is not supported." } }
+      }
+    },
+    {
+      "name": "retrieve charge",
+      "recorded_at": "2025-03-14T09:30:11Z",
+      "request": {
+        "method": "GET",
+        "path": "/v1/charges/P-1002",
+        "headers": { "X-API-Key": "[REDACTED]" }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "id": "P-1002", "customer": "C102", "amount": 500, "currency": "ZAR",
+          "status": "succeeded", "created": "2025-03-02T09:30:00Z"
+        }
+      }
+    },
+    {
+      "name": "retrieve charge - not found",
+      "recorded_at": "2025-03-14T09:31:45Z",
+      "request": {
+        "method": "GET",
+        "path": "/v1/charges/P-9999",
+        "headers": { "X-API-Key": "[REDACTED]" }
+      },
+      "response": {
+        "status": 404,
+        "headers": { "Content-Type": "application/json" },
+        "body": { "error": { "code": "charge_not_found", "message": "No such resource: P-9999." } }
+      }
+    },
+    {
+      "name": "list charges - page 1",
+      "recorded_at": "2025-03-14T09:40:00Z",
+      "request": {
+        "method": "GET",
+        "path": "/v1/charges",
+        "query": { "page": 1, "limit": 2 },
+        "headers": { "X-API-Key": "[REDACTED]" }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "data": [
+            { "id": "P-1001", "customer": "C101", "amount": 250, "currency": "ZAR", "status": "succeeded", "created": "2025-03-01T08:00:00Z" },
+            { "id": "P-1002", "customer": "C102", "amount": 500, "currency": "ZAR", "status": "succeeded", "created": "2025-03-02T09:30:00Z" }
+          ],
+          "page": 1, "limit": 2, "has_more": true
+        }
+      }
+    },
+    {
+      "name": "list charges - page 2",
+      "recorded_at": "2025-03-14T09:40:05Z",
+      "request": {
+        "method": "GET",
+        "path": "/v1/charges",
+        "query": { "page": 2, "limit": 2 },
+        "headers": { "X-API-Key": "[REDACTED]" }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "data": [
+            { "id": "P-1003", "customer": "C103", "amount": 1200, "currency": "USD", "status": "pending", "created": "2025-03-03T10:15:00Z" },
+            { "id": "P-1004", "customer": "C104", "amount": 75, "currency": "EUR", "status": "failed", "created": "2025-03-04T11:45:00Z" }
+          ],
+          "page": 2, "limit": 2, "has_more": true
+        }
+      }
+    },
+    {
+      "name": "refund charge",
+      "recorded_at": "2025-03-14T09:50:30Z",
+      "request": {
+        "method": "POST",
+        "path": "/v1/charges/P-1005/refund",
+        "headers": { "X-API-Key": "[REDACTED]", "Content-Type": "application/json" },
+        "body": { "amount": 1000 }
+      },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "body": { "id": "R-3001", "charge": "P-1005", "amount": 1000, "status": "succeeded" }
+      },
+      "variable_fields": ["$.id"]
+    },
+    {
+      "name": "retrieve charge - no credentials",
+      "recorded_at": "2025-03-14T09:55:00Z",
+      "request": {
+        "method": "GET",
+        "path": "/v1/charges/P-1001",
+        "headers": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": { "Content-Type": "application/json" },
+        "body": { "error": { "code": "unauthorized", "message": "Missing or invalid credentials." } }
+      }
+    },
+    {
+      "name": "charge receipt",
+      "recorded_at": "2025-03-14T10:02:00Z",
+      "request": {
+        "method": "GET",
+        "path": "/v1/charges/P-1002/receipt",
+        "headers": { "X-API-Key": "[REDACTED]" }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": { "charge": "P-1002", "receipt_number": "RCPT-1002", "issued": "2025-03-02T09:31:00Z" }
+      },
+      "variable_fields": ["$.issued"]
+    }
+  ]
+}

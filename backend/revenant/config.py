@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     )
     workers: int | None = None
 
+    # Evidence uploads. See docs/security.md, "Uploads".
+    max_upload_bytes: int = 5 * 1024 * 1024
+    max_evidence_files: int = 50
+
     # Outbound safety. See docs/security.md.
     allow_private_upstreams: bool = False
     upstream_allowlist: str = ""

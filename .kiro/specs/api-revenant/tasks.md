@@ -48,19 +48,19 @@ Rules for every slice:
 
 *Done when:* through the API, a project can be created and the GravePay and NovaPay specifications and fixtures imported, with provenance and a missing-evidence list returned.
 
-- [ ] 3.1 Projects API: CRUD, slug uniqueness, workflow status, activity
+- [x] 3.1 Projects API: CRUD, slug uniqueness, workflow status, activity. *The workflow reports reconstruction and later steps as not yet available until their slices land.*
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
-- [ ] 3.2 Upload validation, storage and parse reports
+- [x] 3.2 Upload validation, storage and parse reports
   - _Requirements: 2.4, 2.5, 11.6_
-- [ ] 3.3 OpenAPI 3.x and Swagger 2.0 parser with local `$ref` resolution, cycle detection, and fact extraction with locators
+- [x] 3.3 OpenAPI 3.x and Swagger 2.0 parser with local `$ref` resolution, cycle detection, and fact extraction with locators. *Markdown, text and standalone JSON Schema files are stored and reported as not analysed.*
   - _Requirements: 2.1, 2.6, 2.9_
-- [ ] 3.4 Fixture parser for legacy fixtures and paired replacement recordings (`pair_with`), credential redaction, endpoint association, fixture-only endpoints, content hashing
+- [x] 3.4 Fixture parser for legacy fixtures and paired replacement recordings (`pair_with`), credential redaction, endpoint association, fixture-only endpoints, content hashing
   - _Requirements: 2.2, 2.3, 2.7_
-- [ ] 3.5 Missing-evidence computation and evidence API routes
+- [x] 3.5 Missing-evidence computation and evidence API routes
   - _Requirements: 2.8_
-- [ ] 3.6 Evidence versioning: `evidence_version` and fingerprint maintained on import and removal; soft delete that retains removed files
+- [x] 3.6 Evidence versioning: `evidence_version` and fingerprint maintained on import and removal; soft delete that retains removed files
   - _Requirements: 2.10_
-- [ ] 3.7 Demonstration evidence: GravePay OpenAPI specification, documentation fragment and fixtures including the four unresolved gaps; NovaPay OpenAPI specification and paired recordings, including the side-effecting `GET` receipt operation and the events operation
+- [x] 3.7 Demonstration evidence: GravePay OpenAPI specification, documentation fragment and fixtures including the four unresolved gaps; NovaPay OpenAPI specification and paired recordings, including the side-effecting `GET` receipt operation and the events operation
   - _Requirements: 9.1, 9.5, 9.6, 9.8_
 
 ## Slice 4 — Reconstruction and mapping approval

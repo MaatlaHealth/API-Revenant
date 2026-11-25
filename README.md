@@ -6,9 +6,9 @@ API Revenant is a design for reconstructing discontinued or breaking APIs from i
 
 It reconstructs *observable interface behaviour*. It does not recover hidden source code or undocumented business logic. Every reconstructed behaviour is classified as **observed**, **inferred** or **unknown**, and linked to the evidence behind it.
 
-## Status: slices 1 and 2 of 8 implemented
+## Status: slices 1 to 3 of 8 implemented
 
-**This repository does not contain a working product yet.** The design is complete and reviewed, and the first two implementation slices are in place. Nothing has been deployed.
+**This repository does not contain a working product yet.** The design is complete and reviewed, and the first three implementation slices are in place. Nothing has been deployed.
 
 | Area | State |
 |---|---|
@@ -20,14 +20,17 @@ It reconstructs *observable interface behaviour*. It does not recover hidden sou
 | Database layer and first migration (projects, credentials, audit log), verified on SQLite and PostgreSQL | **Implemented and tested** (`backend/revenant/db`, `backend/alembic`) |
 | Management API foundation: admin-token authentication, CORS allowlist, common error envelope, single-worker start-up check | **Implemented and tested** |
 | Credential storage: legacy-client keys as keyed hashes, replacement credentials encrypted and versioned with rotation and rollback, audit records, log redaction | **Implemented and tested** (`backend/revenant/security`), with a mutation check |
-| Evidence import, reconstruction, adapter, runtime, verification | **Not implemented** (slices 3–7) |
-| Demonstration services (GravePay, NovaPay simulator, legacy client) | **Not implemented.** `demo/` is a placeholder |
+| Projects API: create, list, update, delete, workflow status, activity; replacement URL checked by the outbound guard | **Implemented and tested** |
+| Evidence Vault: upload validation, OpenAPI 3.x and Swagger 2.0 parsing, fixture and paired-recording import with credential redaction, provenance for every fact, missing-evidence report, evidence versioning with soft delete | **Implemented and tested** (`backend/revenant/evidence`), with a mutation check |
+| Demonstration evidence: GravePay and NovaPay specifications, ten recorded GravePay exchanges and ten paired NovaPay recordings | **Written** (`demo/gravepay`, `demo/novapay`); fictional services, sample data |
+| Reconstruction, adapter, runtime, verification | **Not implemented** (slices 4–7) |
+| Demonstration services (NovaPay simulator, legacy client) | **Not implemented** (slice 6). Only the evidence files exist |
 | Frontend | **Not implemented.** `frontend/` is a placeholder |
 | Docker Compose demonstration | **Planned topology only**; it references images that do not exist yet and has never been run |
 | Deployment (Render, Netlify) | **Configuration drafted, never deployed** |
 | Kiro project files (`.kiro/`) | **Authored outside Kiro and not yet loaded in it** |
 
-The backend currently does nothing useful to an end user: it starts, validates its configuration, answers two health endpoints, and stores credentials for projects. Projects themselves cannot yet be created through the API (slice 3). Everything under the next heading describes the **planned** product.
+The backend currently does nothing useful to an end user: it starts, validates its configuration, answers two health endpoints, manages projects and their credentials, and imports evidence: it parses the legacy and replacement specifications and recorded exchanges, records where every extracted fact came from, and reports what the evidence does not establish. It cannot yet compare the two contracts, build an adapter, proxy traffic or verify anything. Everything under the next heading describes the **planned** product.
 
 ## How it is designed to work (planned)
 
@@ -40,11 +43,11 @@ The backend currently does nothing useful to an end user: it starts, validates i
 
 ## Planned demonstration
 
-A fictional discontinued payment API (**GravePay**) and a fictional replacement (**NovaPay**). An original GravePay client is intended to fail against NovaPay directly and succeed through the API Revenant runtime, with identical source code. These are demonstration services, not real payment providers. None of this exists yet.
+A fictional discontinued payment API (**GravePay**) and a fictional replacement (**NovaPay**). An original GravePay client is intended to fail against NovaPay directly and succeed through the API Revenant runtime, with identical source code. These are demonstration services, not real payment providers. So far only the evidence exists (specifications and recorded exchanges, which the Evidence Vault imports); the simulator, the client and the runtime do not.
 
 ## What can be run today
 
-The backend (health endpoints and credential storage) and its tests, from the `backend` directory:
+The backend (projects, credential storage and evidence import) and its tests, from the `backend` directory:
 
 ```
 python -m venv .venv
@@ -62,6 +65,7 @@ The mutation checks, which weaken one security control at a time and confirm the
 ```
 .venv\Scripts\python tests/mutation/outbound_mutation_check.py
 .venv\Scripts\python tests/mutation/foundation_mutation_check.py
+.venv\Scripts\python tests/mutation/evidence_mutation_check.py
 ```
 
 The specification consistency checks, from the repository root:
@@ -76,7 +80,7 @@ python tools/sync_outbound_tests.py --check
 
 `.github/workflows/ci.yml` runs on every push and pull request, on Linux and Windows:
 
-- the backend: lint, type check, tests, two mutation checks and a migrate-and-start smoke test, from pinned dependency versions;
+- the backend: lint, type check, tests, three mutation checks and a migrate-and-start smoke test, from pinned dependency versions;
 - the backend tests again on a PostgreSQL service, plus migrations run from the command line as deployment does;
 - the outbound-transport spike suite and its mutation check;
 - the specification and configuration consistency check, including that the application's transport tests are identical to the spike's.
@@ -117,7 +121,7 @@ Development proceeds in vertical slices, each ending in something that runs and 
 | — | Architecture, specifications, transport spike, CI definition | Done |
 | 1 | Linux CI and transport integration | Implemented |
 | 2 | Backend foundation and database migrations | Implemented |
-| 3 | Project creation and evidence import | Not started |
+| 3 | Project creation and evidence import | Implemented |
 | 4 | Reconstruction and mapping approval | Not started |
 | 5 | Adapter compilation | Not started |
 | 6 | Runtime and unchanged-client demonstration | Not started |

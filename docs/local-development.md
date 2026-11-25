@@ -31,7 +31,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ## Backend
 
-Slices 1 and 2 are implemented: the backend starts, checks its configuration, serves `/healthz` and `/readyz`, authenticates the management API and stores credentials. SQLite is used locally; no PostgreSQL installation is needed.
+Slices 1 to 3 are implemented: the backend starts, checks its configuration, serves `/healthz` and `/readyz`, authenticates the management API, stores credentials, manages projects and imports evidence. SQLite is used locally; no PostgreSQL installation is needed.
 
 ```powershell
 cd backend
@@ -45,7 +45,7 @@ uvicorn revenant.main:app --reload --port 8000 --no-access-log
 
 - Liveness: http://localhost:8000/healthz
 - Readiness: http://localhost:8000/readyz (reports `not_ready` until `alembic upgrade head` has been run)
-- API documentation: http://localhost:8000/api/v1/docs (credential endpoints only, until slice 3)
+- API documentation: http://localhost:8000/api/v1/docs (projects, evidence and credentials)
 
 Checks:
 
@@ -55,6 +55,7 @@ mypy
 pytest
 python tests/mutation/outbound_mutation_check.py
 python tests/mutation/foundation_mutation_check.py
+python tests/mutation/evidence_mutation_check.py
 ```
 
 Tests create a fresh SQLite database per test from the real migrations. To run them against PostgreSQL instead, set `TEST_DATABASE_URL`; the database it names is emptied for every test, so never point it at one you care about.

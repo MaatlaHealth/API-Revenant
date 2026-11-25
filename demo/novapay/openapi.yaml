@@ -1,0 +1,261 @@
+# NovaPay is a FICTIONAL payment API created for the API Revenant demonstration.
+# It is not a real payment provider. No real payments or customer data are involved.
+openapi: 3.0.3
+info:
+  title: NovaPay API (fictional replacement)
+  version: "2025-01"
+  description: >
+    The replacement contract of the demonstration. It offers the same broad
+    function as GravePay through a different interface.
+servers:
+  - url: http://api.novapay.demo:8000
+security:
+  - Bearer: []
+paths:
+  /payments:
+    post:
+      operationId: createPayment
+      summary: Create a payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentRequest"
+      responses:
+        "201":
+          description: The payment was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    get:
+      operationId: listPayments
+      summary: List payments, oldest first
+      parameters:
+        - name: cursor
+          in: query
+          description: >
+            Position in the list. The cursor is the base64 encoding of the JSON
+            object {"page": N}, where N starts at 1. Omit it for the first page.
+          schema:
+            type: string
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: One page of payments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentList"
+        "401":
+          $ref: "#/components/responses/Problem"
+  /payments/{payment_id}:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    get:
+      operationId: getPayment
+      summary: Retrieve a payment
+      responses:
+        "200":
+          description: The payment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /payments/{payment_id}/refunds:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    post:
+      operationId: createRefund
+      summary: Refund all or part of a payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value:
+                  type: integer
+                  minimum: 1
+      responses:
+        "201":
+          description: The refund was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refund"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /payments/{payment_id}/receipt:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    get:
+      operationId: getReceipt
+      summary: Fetch the receipt for a payment
+      description: >
+        Issues the receipt on first call and records when it was issued. This
+        GET therefore changes data.
+      x-revenant-effect: state_changing
+      responses:
+        "200":
+          description: The receipt.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /payments/{payment_id}/events:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    get:
+      operationId: listPaymentEvents
+      summary: List the events recorded for a payment
+      responses:
+        "200":
+          description: The events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Event"
+components:
+  securitySchemes:
+    Bearer:
+      type: http
+      scheme: bearer
+  parameters:
+    PaymentId:
+      name: payment_id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Problem:
+      description: A problem, in the style of RFC 7807.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Transaction:
+      type: object
+      required: [value, currency_code]
+      properties:
+        value:
+          type: integer
+          minimum: 1
+        currency_code:
+          type: string
+          minLength: 3
+          maxLength: 3
+    PaymentRequest:
+      type: object
+      required: [customer_id, transaction]
+      properties:
+        customer_id:
+          type: string
+        transaction:
+          $ref: "#/components/schemas/Transaction"
+        external_ref:
+          type: string
+    Payment:
+      type: object
+      required: [payment_id, customer_id, transaction, state, created_at]
+      properties:
+        payment_id:
+          type: string
+        customer_id:
+          type: string
+        transaction:
+          $ref: "#/components/schemas/Transaction"
+        state:
+          type: string
+          enum: [COMPLETED, DECLINED, PROCESSING]
+        external_ref:
+          type: string
+        created_at:
+          type: integer
+          description: Seconds since the Unix epoch.
+    PaymentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+        next_cursor:
+          type: string
+          description: Present when another page exists.
+    Refund:
+      type: object
+      required: [refund_id, payment_id, value, state]
+      properties:
+        refund_id:
+          type: string
+        payment_id:
+          type: string
+        value:
+          type: integer
+        state:
+          type: string
+          enum: [COMPLETED, DECLINED, PROCESSING]
+    Receipt:
+      type: object
+      required: [payment_id, receipt_no, receipt_issued_at]
+      properties:
+        payment_id:
+          type: string
+        receipt_no:
+          type: string
+        receipt_issued_at:
+          type: integer
+          description: Seconds since the Unix epoch.
+    Event:
+      type: object
+      required: [kind, occurred_at]
+      properties:
+        kind:
+          type: string
+        occurred_at:
+          type: integer
+    Problem:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string

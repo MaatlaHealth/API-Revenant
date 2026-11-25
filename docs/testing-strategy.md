@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Revision 8 (slices 1 and 2 implemented).
+Revision 9 (slices 1 to 3 implemented).
 
 This document covers two different things that must not be confused:
 
@@ -401,6 +401,23 @@ Listed in `security.md` (SSRF rows): address rules, DNS rebinding with a resolve
 | Redaction | Headers by name, sensitive paths, known secret values in any position including percent-encoded and as dictionary keys; the log processor scrubs registered secrets from any log line |
 
 `backend/tests/mutation/foundation_mutation_check.py` weakens twenty of these controls one at a time (for example: accept any token, store keys in plaintext, log the query string, return internal error messages) and requires each to be detected.
+
+### Implemented so far (slice 3)
+
+| Area | Tests |
+|---|---|
+| Upload validation | Disallowed types, oversized, empty, binary and non-UTF-8 files rejected with specific errors; filenames reduced to a base name; per-project file limit |
+| Safe parsing | YAML that tries to construct Python objects is refused; nesting depth and document size are bounded (including YAML alias expansion); malformed JSON and YAML become a stored report, not a crash |
+| OpenAPI 3.x and Swagger 2.0 | Endpoints, methods, parameters, request and response fields with types and required flags, nested and array fields, status codes, error shapes, pagination parameters, security schemes; `allOf` merged; `oneOf` reported; non-JSON bodies recorded as unsupported |
+| References | Local `$ref` resolved with the locator pointing at the definition; remote and file references never fetched and reported; cyclic references terminate |
+| Provenance | Every fact has a locator that resolves inside the source document; the same fact from two sources has two rows |
+| Fixtures | Demonstration files import completely; invalid fixtures rejected one by one with reasons; credential headers and query parameters redacted and absent from every stored column; recordings paired with legacy fixtures; import order does not matter |
+| Nothing discarded | Six kinds of unparseable file are stored with a report and listed as missing evidence |
+| Missing evidence | The demonstration produces exactly the expected list: one endpoint without a fixture and seven documented status codes without an example |
+| Versioning and removal | Version and fingerprint change on import and removal; the fingerprint depends only on the current file set; removed files leave the current set but their content and facts are retained |
+| Projects | Slug generation and uniqueness, validation, pagination, workflow status, activity, deletion refused while running; eight unsafe replacement URLs rejected before saving |
+
+`backend/tests/mutation/evidence_mutation_check.py` weakens twenty-seven of these controls one at a time (for example: load YAML unsafely, keep credentials in stored fixtures, silently drop unparseable files, skip the outbound guard on the replacement URL).
 
 ### End-to-end acceptance test
 

@@ -94,6 +94,9 @@ jobs:
       - name: Mutation check of authentication, credentials, redaction and errors
         if: matrix.os == 'ubuntu-latest'
         run: python tests/mutation/foundation_mutation_check.py
+      - name: Mutation check of the evidence vault and projects API
+        if: matrix.os == 'ubuntu-latest'
+        run: python tests/mutation/evidence_mutation_check.py
       - name: Migrate, start the server and call the health endpoints
         if: matrix.os == 'ubuntu-latest'
         env:

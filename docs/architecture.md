@@ -1,6 +1,6 @@
 # API Revenant — Technical Architecture
 
-Status: Stage 1 design, revision 6. Implementation status: slices 1 and 2 (configuration, logging, health endpoints, outbound guard, database layer, admin authentication, credential storage, redaction) are implemented and tested; everything else in this document is still design. See `README.md` for what exists.
+Status: Stage 1 design, revision 6. Implementation status: slices 1 to 3 (configuration, logging, health endpoints, outbound guard, database layer, admin authentication, credential storage, redaction, projects API, evidence import) are implemented and tested; everything else in this document is still design. See `README.md` for what exists.
 
 ## 1. System overview
 
