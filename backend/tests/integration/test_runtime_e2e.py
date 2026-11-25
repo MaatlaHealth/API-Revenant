@@ -236,6 +236,27 @@ def test_legacy_credentials_are_required_and_never_forwarded(stack: Stack) -> No
     assert len(rejected) == 6 and all(e["upstream_status"] is None for e in rejected)
 
 
+def test_other_credential_headers_a_client_sends_are_not_recorded(stack: Stack) -> None:
+    """A client may send cookies or an Authorization header of its own. They are
+    credentials too: they reach no rule and are stored in no trace."""
+    response = httpx.get(
+        f"{stack.backend}/runtime/gravepay/v1/charges/P-1001",
+        headers={**KEY, "Authorization": "Bearer client-own-token-abc123",
+                 "Cookie": "session=cookie-value-def456",
+                 "Proxy-Authorization": "Basic cHJveHk6c2VjcmV0", "X-Trace": "kept-header"})
+    assert response.status_code == 200
+    request_id = response.headers["x-revenant-request-id"]
+    stack.events()
+    stored = stack.api("GET", f"/runtime/events/{request_id}")
+    recorded = stored["trace"]["legacy_request"]["headers"]
+    assert recorded["x-trace"] == "kept-header"       # ordinary headers are kept
+    assert not {"authorization", "cookie", "proxy-authorization", "x-api-key"} & set(recorded)
+    blob = json.dumps(stored)
+    for secret in ("client-own-token-abc123", "cookie-value-def456", "cHJveHk6c2VjcmV0",
+                   LEGACY_KEY):
+        assert secret not in blob
+
+
 def test_a_rejected_replacement_credential_is_a_502_not_a_401(stack: Stack) -> None:
     stack.api("PUT", "/credentials/outbound/replacement_credential",
               json={"value": "a-token-novapay-rejects"})

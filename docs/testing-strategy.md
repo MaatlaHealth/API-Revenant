@@ -461,7 +461,7 @@ Tests in this slice that say "real servers" start the NovaPay simulator and the 
 | Area | Tests |
 |---|---|
 | Demonstration (real servers) | The unchanged client fails against NovaPay directly and succeeds through the runtime; the five recorded requests are stored in order; `demo/run_demo.py` is run as a script; the client file matches its recorded checksum; the simulator reproduces every recording and imports no API Revenant code |
-| Host dispatch | Normalisation of twelve well-formed and thirty-four malformed hosts; three-way dispatch by exact match with the scope passed through untouched; `421` for unknown, suffix, prefix and sibling hosts; probes only on their exact paths; `400` for missing, duplicated and malformed hosts and absolute-form targets; five forwarded-host headers ignored by default; forwarded host used only from a trusted proxy, once, well formed; a property test that any host accepted at registration matches at dispatch |
+| Host dispatch | Normalisation of twelve well-formed and thirty-eight malformed hosts; three-way dispatch by exact match with the scope passed through untouched; `421` for unknown, suffix, prefix and sibling hosts; probes only on their exact paths; `400` for missing, duplicated and malformed hosts and absolute-form targets; five forwarded-host headers ignored by default; forwarded host used only from a trusted proxy, once, well formed; a property test that any host accepted at registration matches at dispatch |
 | Management isolation (real servers) | The management API, its documentation and the probes are not served on a legacy hostname, with or without the admin token; the admin token is not a legacy key and the reverse |
 | Credential separation (real servers) | Six kinds of missing or wrong legacy credential get `401` and nothing reaches the replacement; a rejected replacement credential is `502`; keys added and revoked take effect without a restart; the last key of a running runtime cannot be revoked; rotation and rollback reload the adapter; neither credential appears in any stored event |
 | Query-parameter credentials | Thirteen extraction cases and a property test (the sanitised query is the original minus exactly one segment); stored queries are sanitised; a duplicated carrier is `401`; other parameters keep their bytes and order; a key that would travel upstream in a body is blocked with `500` |
@@ -473,7 +473,7 @@ Tests in this slice that say "real servers" start the NovaPay simulator and the 
 | Trace pipeline | Batched persistence; a thousand offers against a stuck writer never wait and memory stays at the queue bound; failures retried three times, then counted and recorded once as a loss event; shutdown drains within its deadline and counts the rest; a stopped writer is reported and restarted; the size cap; retention. Both counter identities are asserted after every scenario |
 | Control | Start refused with the specific reason until an adapter, the credential and a key exist, with nothing half-started; stop and start; host registration refuses nine kinds of unacceptable host and six spellings of a taken one; the seed is idempotent and does not take over an ordinary project |
 
-`backend/tests/mutation/runtime_mutation_check.py` weakens sixty rules of the runtime one at a time.
+`backend/tests/mutation/runtime_mutation_check.py` weakens fifty-nine rules of the runtime one at a time.
 
 ### End-to-end acceptance test
 

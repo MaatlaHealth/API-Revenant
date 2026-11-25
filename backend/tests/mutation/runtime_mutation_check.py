@@ -44,9 +44,9 @@ MUTATIONS: Mutations = {
     "do not lowercase hosts": (
         HOSTS, "    host = host.lower()\n", "",
     ),
-    "allow wildcard registrations": (
-        HOSTS, '    if "*" in text:', "    if False:",
-    ),
+    # Not listed: removing the explicit wildcard check in ``registrable_host``.
+    # The label grammar already rejects "*", so that change alters no behaviour
+    # (an equivalent mutant); the check is kept for its clearer error message.
     "allow an IP address as a legacy host": (
         HOSTS, "    if is_ip_literal(host):", "    if False:",
     ),

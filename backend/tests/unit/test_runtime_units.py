@@ -42,6 +42,9 @@ def test_well_formed_hosts_are_normalised(raw: str, expected: str) -> None:
     "api.gravepay.demo:8000:1", "a..b", ".a.example", "-a.example", "a-.example",
     "a" * 64 + ".example", ".".join(["a" * 60] * 5), ".", "..", "[::1", "[::1]x", "[1.2.3.4]",
     "[zz::1]", "::1",
+    # A scoped IPv6 literal is a valid address to the standard library; only the
+    # character rule keeps it, and anything else with a percent sign, out.
+    "[fe80::1%eth0]", "[fe80::1%25eth0]:8000", "[::1\t]", "[::1 ]",
 ])
 def test_malformed_hosts_are_rejected(raw: str) -> None:
     with pytest.raises(HostError) as excinfo:
