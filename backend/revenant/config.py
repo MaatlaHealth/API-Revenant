@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import ipaddress
 import multiprocessing
 import os
 from typing import Literal
@@ -65,6 +66,24 @@ class Settings(BaseSettings):
     upstream_allowed_ports: str = "80,443,8000,8080,8443"
     upstream_timeout_seconds: float = 30.0
 
+    # Runtime. See docs/architecture.md, sections 4.2, 4.5, 4.6 and 4.9.
+    # Comma-separated hostnames on which the management API answers.
+    public_hosts: str = ""
+    trust_forwarded_host: bool = False
+    trusted_proxies: str = ""
+    lease_renew_seconds: float = 5.0
+    lease_grace_seconds: float = 45.0
+    request_lifetime_seconds: float = 30.0
+    lease_clock_margin_seconds: float = 15.0
+    lease_ttl_seconds: float = 90.0
+    lease_wait_seconds: float = 120.0
+    lease_force_acquire: bool = False
+    trace_queue_size: int = 1000
+    trace_drain_seconds: float = 5.0
+    runtime_max_body_bytes: int = 1024 * 1024
+    runtime_max_concurrency: int = 100
+    runtime_event_retention: int = 5000
+
     @property
     def is_production(self) -> bool:
         return self.env == "production"
@@ -85,6 +104,19 @@ class Settings(BaseSettings):
             if text:
                 ports.add(int(text))
         return frozenset(ports)
+
+    @property
+    def public_host_set(self) -> frozenset[str]:
+        """Management hosts, lower case, without port or trailing dot."""
+        return frozenset(
+            item.strip().lower().rstrip(".") for item in self.public_hosts.split(",")
+            if item.strip()
+        )
+
+    @property
+    def trusted_proxy_networks(self) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+        return [ipaddress.ip_network(item.strip(), strict=False)
+                for item in self.trusted_proxies.split(",") if item.strip()]
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -146,6 +178,36 @@ def startup_problems(settings: Settings, *, supervised: bool | None = None) -> l
         if any(port < 1 or port > 65535 for port in ports):
             problems.append("REVENANT_UPSTREAM_ALLOWED_PORTS contains a port outside 1-65535")
 
+    # --- runtime ----------------------------------------------------------------
+    if settings.lease_ttl_seconds < (settings.lease_grace_seconds
+                                     + settings.request_lifetime_seconds
+                                     + settings.lease_clock_margin_seconds):
+        problems.append(
+            "REVENANT_LEASE_TTL_SECONDS must be at least the grace period plus the request "
+            "lifetime plus the clock margin"
+        )
+    if min(settings.lease_renew_seconds, settings.lease_grace_seconds,
+           settings.request_lifetime_seconds, settings.lease_ttl_seconds) <= 0:
+        problems.append("lease and request-lifetime settings must be positive")
+    elif settings.lease_renew_seconds >= settings.lease_grace_seconds:
+        problems.append("REVENANT_LEASE_RENEW_SECONDS must be shorter than the grace period")
+    if settings.lease_wait_seconds < settings.lease_ttl_seconds + 10:
+        problems.append("REVENANT_LEASE_WAIT_SECONDS must be at least the lease TTL plus 10")
+    if settings.upstream_timeout_seconds > settings.request_lifetime_seconds:
+        problems.append("REVENANT_UPSTREAM_TIMEOUT_SECONDS must not exceed the request lifetime")
+    try:
+        proxies = settings.trusted_proxy_networks
+    except ValueError:
+        problems.append("REVENANT_TRUSTED_PROXIES must be a comma-separated list of networks")
+    else:
+        if settings.trust_forwarded_host and not proxies:
+            problems.append(
+                "REVENANT_TRUST_FORWARDED_HOST needs REVENANT_TRUSTED_PROXIES; a forwarded host "
+                "is never trusted from an arbitrary peer"
+            )
+    if settings.trace_queue_size < 1 or settings.runtime_max_concurrency < 1:
+        problems.append("trace queue size and runtime concurrency must be at least 1")
+
     # --- secrets --------------------------------------------------------------
     if secret_key and not _is_placeholder(secret_key) and not is_fernet_key(secret_key):
         problems.append("REVENANT_SECRET_KEY is not a valid Fernet key")
@@ -155,6 +217,13 @@ def startup_problems(settings: Settings, *, supervised: bool | None = None) -> l
         problems.append("REVENANT_CORS_ORIGINS must list explicit origins, not '*'")
 
     if settings.is_production:
+        if not settings.public_host_set:
+            problems.append(
+                "REVENANT_PUBLIC_HOSTS must list the management hostnames in production"
+            )
+        if settings.lease_force_acquire:
+            problems.append("REVENANT_LEASE_FORCE_ACQUIRE is a development aid and is refused "
+                            "in production")
         if not secret_key or _is_placeholder(secret_key):
             problems.append("REVENANT_SECRET_KEY must be set to a generated key in production")
         if not admin_token or _is_placeholder(admin_token):

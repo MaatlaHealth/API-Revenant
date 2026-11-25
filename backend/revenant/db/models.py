@@ -476,3 +476,106 @@ class AdapterVersion(Base):
     compiled_by: Mapped[str] = mapped_column(String(64))
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# ---- slice 6: runtime ------------------------------------------------------------------
+
+RUNTIME_DESIRED = ("running", "stopped")
+RUNTIME_STATUSES = ("stopped", "starting", "running", "failed")
+EVENT_KINDS = ("request", "lifecycle", "error", "trace_loss")
+
+
+class RuntimeInstance(Base):
+    """Desired and reported state of the runtime of one project."""
+
+    __tablename__ = "runtime_instances"
+    __table_args__ = (
+        UniqueConstraint("project_id"),
+        CheckConstraint(_in("desired_state", RUNTIME_DESIRED), name="desired_state"),
+        CheckConstraint(_in("status", RUNTIME_STATUSES), name="status"),
+        # A runtime that should be running is always pinned to an adapter version.
+        CheckConstraint("desired_state != 'running' OR adapter_version_id IS NOT NULL",
+                        name="pinned"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    desired_state: Mapped[str] = mapped_column(String(16), default="stopped")
+    adapter_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("adapter_versions.id", ondelete="SET NULL")
+    )
+    generation: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="stopped")
+    last_error: Mapped[str | None] = mapped_column(Text)
+    last_loaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    config: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class RuntimeHost(Base):
+    """A legacy hostname routed to one project. The key is the normalised form,
+    so one hostname can never route to two projects."""
+
+    __tablename__ = "runtime_hosts"
+
+    host: Mapped[str] = mapped_column(String(253), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RuntimeEvent(Base):
+    """A persisted trace or lifecycle event. A row exists only for what was
+    actually stored. No column holds an unsanitised query or a credential."""
+
+    __tablename__ = "runtime_events"
+    __table_args__ = (
+        UniqueConstraint("request_id"),
+        CheckConstraint(_in("kind", EVENT_KINDS), name="kind"),
+        Index("ix_runtime_events_project_id_created_at", "project_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    request_id: Mapped[str | None] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(16))
+    entry: Mapped[str | None] = mapped_column(String(8))
+    original_host: Mapped[str | None] = mapped_column(String(300))
+    method: Mapped[str | None] = mapped_column(String(16))
+    legacy_path: Mapped[str | None] = mapped_column(String(2000))
+    # Sanitised: the inbound credential parameter is removed before this is set.
+    legacy_query: Mapped[str | None] = mapped_column(Text)
+    query_credential_removed: Mapped[bool] = mapped_column(Boolean, default=False)
+    upstream_path: Mapped[str | None] = mapped_column(String(2000))
+    route_id: Mapped[str | None] = mapped_column(String(100))
+    legacy_status: Mapped[int | None] = mapped_column(Integer)
+    upstream_status: Mapped[int | None] = mapped_column(Integer)
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    upstream_ms: Mapped[int | None] = mapped_column(Integer)
+    outcome: Mapped[str] = mapped_column(String(32))
+    trace: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    adapter_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("adapter_versions.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class InstanceLease(Base):
+    """The single row that says which process may serve runtime traffic."""
+
+    __tablename__ = "instance_lease"
+    __table_args__ = (CheckConstraint("id = 1", name="single_row"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    holder_id: Mapped[str | None] = mapped_column(String(64))
+    host: Mapped[str | None] = mapped_column(String(255))
+    parent_pid: Mapped[int | None] = mapped_column(Integer)
+    epoch: Mapped[int] = mapped_column(Integer, default=0)
+    # Incremented by every acquisition and renewal: the compare-and-set token.
+    beat: Mapped[int] = mapped_column(Integer, default=0)
+    # Written with the database clock, never with a process clock.
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    released: Mapped[bool] = mapped_column(Boolean, default=True)
+    handover_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    handover_requested_by: Mapped[str | None] = mapped_column(String(64))

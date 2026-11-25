@@ -10,12 +10,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Request
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from revenant import audit
 from revenant.api.deps import AdminActor, CurrentProject, DbSession, Keys, require_admin
 from revenant.db.models import InboundKey, OutboundCredential
+from revenant.runtime.service import RuntimeService
 from revenant.security.credentials import InboundKeyStore, OutboundCredentialStore
 
 router = APIRouter(
@@ -29,6 +30,13 @@ router = APIRouter(
 LABEL_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._ -]{0,63}$"
 NAME_PATTERN = r"^[a-z][a-z0-9_]{0,63}$"
 CredentialName = Annotated[str, Path(pattern=NAME_PATTERN)]
+
+
+def get_runtime(request: Request, session: DbSession) -> RuntimeService:
+    return RuntimeService(session, request.app.state.settings, request.app.state.runtime)
+
+
+Runtime = Annotated[RuntimeService, Depends(get_runtime)]
 
 
 class _Body(BaseModel):
@@ -98,9 +106,12 @@ def add_inbound_key(
     session: DbSession,
     keys: Keys,
     actor: AdminActor,
+    runtime: Runtime,
 ) -> InboundKeyCreated:
     supplied = body.value.get_secret_value() if body.value is not None else None
     row, generated = InboundKeyStore(session, keys).add(project.id, body.label, supplied)
+    # Effective on the next runtime request, without a restart.
+    runtime.refresh_inbound(project.id)
     audit.record(
         session, actor=actor, action="credential.inbound.add", target_type="inbound_key",
         target_id=row.id, project_id=project.id,
@@ -111,9 +122,12 @@ def add_inbound_key(
 
 @router.post("/inbound/{key_id}/revoke")
 def revoke_inbound_key(
-    key_id: str, project: CurrentProject, session: DbSession, keys: Keys, actor: AdminActor
+    key_id: str, project: CurrentProject, session: DbSession, keys: Keys, actor: AdminActor,
+    runtime: Runtime,
 ) -> InboundKeyOut:
+    runtime.guard_last_key(project, key_id)
     row = InboundKeyStore(session, keys).revoke(project.id, key_id)
+    runtime.refresh_inbound(project.id)
     audit.record(
         session, actor=actor, action="credential.inbound.revoke", target_type="inbound_key",
         target_id=row.id, project_id=project.id, meta={"label": row.label},
@@ -140,10 +154,13 @@ def set_outbound_credential(
     session: DbSession,
     keys: Keys,
     actor: AdminActor,
+    runtime: Runtime,
 ) -> OutboundCredentialOut:
     row = OutboundCredentialStore(session, keys).rotate(
         project.id, name, body.value.get_secret_value()
     )
+    # A running adapter is reloaded with the new version in the same transaction.
+    runtime.reload(project)
     audit.record(
         session, actor=actor, action="credential.outbound.rotate",
         target_type="outbound_credential", target_id=row.id, project_id=project.id,
@@ -155,9 +172,10 @@ def set_outbound_credential(
 @router.post("/outbound/{name}/rollback")
 def rollback_outbound_credential(
     name: CredentialName, project: CurrentProject, session: DbSession, keys: Keys,
-    actor: AdminActor,
+    actor: AdminActor, runtime: Runtime,
 ) -> OutboundCredentialOut:
     row = OutboundCredentialStore(session, keys).rollback(project.id, name)
+    runtime.reload(project)
     audit.record(
         session, actor=actor, action="credential.outbound.rollback",
         target_type="outbound_credential", target_id=row.id, project_id=project.id,

@@ -11,7 +11,7 @@ license = { text = "MIT" }
 # Dependencies are added slice by slice, only when code uses them.
 # Exact tested versions are in requirements.lock.txt, which CI installs.
 dependencies = [
-  "fastapi>=0.115,<1",
+  "fastapi>=0.121,<1",
   "uvicorn>=0.30,<1",
   "pydantic>=2.8,<3",
   "pydantic-settings>=2.4,<3",

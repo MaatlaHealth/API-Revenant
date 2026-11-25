@@ -15,6 +15,10 @@ VALID_TOKEN = "t" * 40
 
 
 def settings(**overrides: object) -> Settings:
+    # Production must name its management hosts; the tests below that are about
+    # other rules supply one, and the rule has its own test.
+    if overrides.get("env") == "production":
+        overrides.setdefault("public_hosts", "api.example.com")
     return Settings(_env_file=None, **overrides)  # type: ignore[arg-type]
 
 
@@ -164,3 +168,56 @@ def test_malformed_previous_secret_key_is_refused() -> None:
     problems = startup_problems(settings(secret_key=VALID_KEY, secret_key_previous="nope"),
                                 supervised=False)
     assert problems == ["REVENANT_SECRET_KEY_PREVIOUS is not a valid Fernet key"]
+
+
+# ---- runtime settings (requirements 7.23, 7.31) ----------------------------------------------
+
+
+def test_production_must_list_its_management_hosts() -> None:
+    problems = startup_problems(settings(env="production", secret_key=VALID_KEY,
+                                         admin_token=VALID_TOKEN, public_hosts=" "),
+                                supervised=False)
+    assert problems == ["REVENANT_PUBLIC_HOSTS must list the management hostnames in production"]
+
+
+@pytest.mark.parametrize("overrides", [
+    {"lease_ttl_seconds": 89},                                   # 45 + 30 + 15 = 90
+    {"lease_grace_seconds": 46},
+    {"request_lifetime_seconds": 31, "upstream_timeout_seconds": 5},
+    {"lease_clock_margin_seconds": 16},
+])
+def test_the_lease_ttl_must_cover_grace_lifetime_and_margin(overrides: dict[str, float]) -> None:
+    problems = startup_problems(settings(**overrides), supervised=False)
+    assert problems == ["REVENANT_LEASE_TTL_SECONDS must be at least the grace period plus the "
+                        "request lifetime plus the clock margin"]
+
+
+def test_the_default_lease_timing_is_exactly_at_the_limit() -> None:
+    defaults = settings()
+    assert defaults.lease_ttl_seconds == (defaults.lease_grace_seconds
+                                          + defaults.request_lifetime_seconds
+                                          + defaults.lease_clock_margin_seconds)
+    assert startup_problems(settings(lease_ttl_seconds=90), supervised=False) == []
+
+
+def test_other_runtime_settings_are_checked() -> None:
+    def problems(**overrides: object) -> str:
+        return " | ".join(startup_problems(settings(**overrides), supervised=False))
+
+    assert "at least the lease TTL plus 10" in problems(lease_wait_seconds=95)
+    assert "shorter than the grace period" in problems(lease_renew_seconds=45)
+    assert "must be positive" in problems(lease_renew_seconds=0)
+    assert "must not exceed the request lifetime" in problems(upstream_timeout_seconds=31)
+    assert "needs REVENANT_TRUSTED_PROXIES" in problems(trust_forwarded_host=True)
+    assert problems(trust_forwarded_host=True, trusted_proxies="10.0.0.0/8") == ""
+    assert "list of networks" in problems(trusted_proxies="not-a-network")
+    assert "must be at least 1" in problems(trace_queue_size=0)
+
+
+def test_force_acquire_is_refused_in_production() -> None:
+    problems = startup_problems(settings(env="production", secret_key=VALID_KEY,
+                                         admin_token=VALID_TOKEN, lease_force_acquire=True),
+                                supervised=False)
+    assert problems == ["REVENANT_LEASE_FORCE_ACQUIRE is a development aid and is refused in "
+                        "production"]
+    assert startup_problems(settings(lease_force_acquire=True), supervised=False) == []

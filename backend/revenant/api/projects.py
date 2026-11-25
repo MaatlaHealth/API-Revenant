@@ -19,6 +19,7 @@ from revenant.config import Settings
 from revenant.db.models import AdapterVersion, AuditRecord, Project, Reconstruction
 from revenant.errors import Conflict, OutboundBlocked, UnsafeUrl
 from revenant.evidence.service import EvidenceService
+from revenant.runtime.service import after_commit
 from revenant.security.outbound import Resolver, check_destination, system_resolver
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"],
@@ -211,6 +212,10 @@ def create_project(body: ProjectCreate, request: Request, session: DbSession,
     session.flush()
     audit.record(session, actor=actor, action="project.create", target_type="project",
                  target_id=project.id, project_id=project.id, meta={"slug": slug})
+    runtime = getattr(request.app.state, "runtime", None)
+    if runtime is not None:
+        project_id = project.id
+        after_commit(session, lambda: runtime.slugs.__setitem__(slug, project_id))
     return describe(project, evidence_service(session, settings))
 
 
@@ -255,13 +260,18 @@ def update_project(body: ProjectUpdate, request: Request, project: CurrentProjec
 
 
 @router.delete("/{project_id}", status_code=204)
-def delete_project(project: CurrentProject, session: DbSession, actor: AdminActor) -> None:
+def delete_project(project: CurrentProject, request: Request, session: DbSession,
+                   actor: AdminActor) -> None:
     if project.status == "running":
         raise Conflict("The project's runtime is running. Stop it before deleting the project.",
                        details=[{"field": "status", "issue": "runtime is running"}])
     audit.record(session, actor=actor, action="project.delete", target_type="project",
                  target_id=project.id, project_id=None,
                  meta={"slug": project.slug, "name": project.name})
+    runtime = getattr(request.app.state, "runtime", None)
+    if runtime is not None:
+        project_id = project.id
+        after_commit(session, lambda: runtime.forget(project_id))
     session.delete(project)
 
 

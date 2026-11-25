@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from revenant.transform.model import (
     Const,
@@ -487,10 +487,18 @@ class LegacyResponse:
     unmapped_fields: list[str] = field(default_factory=list)
 
 
-def match_path(template: str, path: str) -> dict[str, str] | None:
+def match_path(template: str, path: str, *, decode: bool = False) -> dict[str, str] | None:
+    """Path parameter values if ``path`` matches ``template``, else None.
+
+    With ``decode`` the path is a raw request path: it is split on ``/`` first
+    and each segment is percent-decoded afterwards, so an encoded slash stays
+    inside its segment and can never change which route matches.
+    """
     expected, actual = template.strip("/").split("/"), path.strip("/").split("/")
     if len(expected) != len(actual):
         return None
+    if decode:
+        actual = [unquote(part, errors="strict") if "%" in part else part for part in actual]
     found: dict[str, str] = {}
     for part, value in zip(expected, actual, strict=True):
         if part.startswith("{") and part.endswith("}"):
@@ -503,8 +511,8 @@ def match_path(template: str, path: str) -> dict[str, str] | None:
 
 
 def request_scopes(route: Any, path: str, query: dict[str, Any], headers: dict[str, Any],
-                   body: Any) -> dict[str, Any]:
-    params = match_path(route.match.path, path)
+                   body: Any, *, decode: bool = False) -> dict[str, Any]:
+    params = match_path(route.match.path, path, decode=decode)
     if params is None:
         raise TransformError("no_route", "the path does not match the route")
     return {"body": body, "query": dict(query), "path": params,

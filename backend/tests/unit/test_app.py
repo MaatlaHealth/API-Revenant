@@ -28,8 +28,18 @@ def test_readyz_reports_readiness(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.json() == {
         "status": "ready",
-        "checks": {"configuration": "ok", "database": "ok", "migrations": "ok"},
+        "checks": {"configuration": "ok", "database": "ok", "migrations": "ok",
+                   "lease": "held", "recovery": "done"},
     }
+
+
+def test_readyz_is_not_ready_until_the_lease_is_held(settings: Settings) -> None:
+    """Without the lifespan nothing has acquired the lease: the process is in standby."""
+    response = TestClient(create_app(settings, supervised=False)).get("/readyz")
+    assert response.status_code == 503
+    checks = response.json()["checks"]
+    assert (checks["migrations"], checks["lease"], checks["recovery"]) == (
+        "ok", "standby", "pending")
 
 
 def test_readyz_is_not_ready_before_migrations(database_url: str) -> None:
@@ -47,6 +57,7 @@ def test_readyz_is_not_ready_when_database_is_unreachable() -> None:
     assert response.status_code == 503
     assert response.json()["checks"] == {
         "configuration": "ok", "database": "unavailable", "migrations": "unknown",
+        "lease": "standby", "recovery": "pending",
     }
 
 

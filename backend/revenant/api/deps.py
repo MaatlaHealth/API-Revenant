@@ -30,7 +30,11 @@ def get_database(request: Request) -> Database:
 
 
 def get_session(database: Annotated[Database, Depends(get_database)]) -> Iterator[Session]:
-    """One unit of work per request: commit on success, roll back on error."""
+    """One unit of work per request: commit on success, roll back on error.
+
+    Used with ``scope="function"`` so the commit happens before the response is
+    sent. A client that acts on a response always finds its change stored.
+    """
     with database.session() as session:
         yield session
 
@@ -63,7 +67,7 @@ def get_master_keys(settings: Annotated[Settings, Depends(get_settings)]) -> Mas
 
 def get_project(
     project_id: str,
-    session: Annotated[Session, Depends(get_session)],
+    session: Annotated[Session, Depends(get_session, scope="function")],
 ) -> Project:
     project = session.get(Project, project_id)
     if project is None:
@@ -72,6 +76,6 @@ def get_project(
 
 
 AdminActor = Annotated[str, Depends(require_admin)]
-DbSession = Annotated[Session, Depends(get_session)]
+DbSession = Annotated[Session, Depends(get_session, scope="function")]
 CurrentProject = Annotated[Project, Depends(get_project)]
 Keys = Annotated[MasterKeys, Depends(get_master_keys)]

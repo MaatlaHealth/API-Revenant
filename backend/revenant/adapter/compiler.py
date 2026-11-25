@@ -376,11 +376,16 @@ def strip_credentials(document: AdapterDocument, headers: dict[str, Any],
     return clean_headers, clean_query, [value for value in presented if value]
 
 
-def find_route(document: AdapterDocument, method: str, path: str) -> Route | None:
+def find_route(document: AdapterDocument, method: str, path: str, *,
+               decode: bool = False) -> Route | None:
     """The route for a legacy request; literal path segments win over parameters."""
     best: tuple[int, Route] | None = None
     for route in document.routes:
-        if route.match.method != method.upper() or match_path(route.match.path, path) is None:
+        try:
+            matched = match_path(route.match.path, path, decode=decode)
+        except UnicodeDecodeError:
+            return None  # a path that is not valid UTF-8 matches nothing
+        if route.match.method != method.upper() or matched is None:
             continue
         literal = sum(1 for part in route.match.path.split("/") if part and "{" not in part)
         if best is None or literal > best[0]:
