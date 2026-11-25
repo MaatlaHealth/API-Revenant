@@ -113,7 +113,10 @@ jobs:
       - name: Type check
         run: python -m mypy
       - name: Tests
-        run: python -m pytest -v
+        run: python -m pytest -v --junitxml=report.xml
+      - name: Name the failing tests in the run summary
+        if: failure()
+        run: python ../tools/annotate_failures.py report.xml
       - name: Migrate, start the server and call the health endpoints
         if: matrix.os == 'ubuntu-latest'
         env:
@@ -170,7 +173,15 @@ jobs:
       - name: Confirm the tests really use PostgreSQL
         run: python -c "import os, sqlalchemy as sa; from revenant.db.session import make_engine; e = make_engine(os.environ['TEST_DATABASE_URL']); print(e.connect().execute(sa.text('select version()')).scalar()); assert e.dialect.name == 'postgresql'"
       - name: Tests on PostgreSQL
-        run: python -m pytest -v tests/unit tests/integration tests/security/test_credentials.py
+        # The lease and the trace writer are included: their SQL must behave on
+        # PostgreSQL exactly as on SQLite.
+        run: >-
+          python -m pytest -v --junitxml=report.xml tests/unit tests/integration
+          tests/security/test_credentials.py tests/resilience/test_lease.py
+          tests/resilience/test_traces.py
+      - name: Name the failing tests in the run summary
+        if: failure()
+        run: python ../tools/annotate_failures.py report.xml
       - name: Migrate with the alembic command line, as deployment does
         env:
           DATABASE_URL: postgresql://revenant:ci-only-not-a-secret@localhost:5432/revenant_test

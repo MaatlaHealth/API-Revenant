@@ -64,6 +64,7 @@ class TracePipeline:
         self.dropped = {"queue_full": 0, "persist_failed": 0, "shutdown": 0}
         self.in_flight = 0
         self.writer = "stopped"  # running | retrying | stopped
+        self.restarts = 0        # times the writer stopped unexpectedly and was restarted
         self.last_persist_error: str | None = None
         # Losses not yet recorded as a trace_loss event: (project, reason) -> count.
         self._unrecorded: Counter[tuple[str, str]] = Counter()
@@ -111,6 +112,7 @@ class TracePipeline:
                 raise
             except Exception as exc:  # noqa: BLE001 - the writer must not die silently
                 self.writer = "stopped"
+                self.restarts += 1
                 log.error("trace_writer_crashed", error_type=type(exc).__name__)
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 10.0)
@@ -235,4 +237,5 @@ class TracePipeline:
         return {"writer": self.writer, "queue_depth": depth, "queue_capacity": self.queue_size,
                 "in_flight": self.in_flight, "generated": self.generated,
                 "accepted": self.accepted, "persisted": self.persisted,
-                "dropped": dict(self.dropped), "last_persist_error": self.last_persist_error}
+                "dropped": dict(self.dropped), "last_persist_error": self.last_persist_error,
+                "writer_restarts": self.restarts}
