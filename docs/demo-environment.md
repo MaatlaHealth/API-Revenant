@@ -35,7 +35,7 @@ These are present in the evidence set on purpose, and the product must report th
 3. **Refund of an already-refunded charge.** The specification names an error but gives no code; no fixture exists.
 4. **`reference` uniqueness.** Documentation text mentions idempotency by `reference`, but no fixture demonstrates a repeated request.
 
-## Files (created in Stage 3)
+## Files
 
 ```
 demo/gravepay/openapi.yaml          legacy contract
@@ -105,7 +105,7 @@ The simulator keeps its data in named **sandboxes**, each created from the same 
 
 - Written once against the GravePay contract, then never edited. A test asserts its checksum.
 - Default base URL in source: `http://api.gravepay.demo:8000`. `GRAVEPAY_BASE_URL` may override it for the non-Docker runner. The Docker demonstration does not set the override.
-- It performs: create a charge, retrieve it, list page 2 with limit 20, trigger an invalid-currency error and handle it by its legacy error code, issue a refund. It exits non-zero on any unexpected response.
+- It performs: create a charge, retrieve it, list page 2 with limit 2, trigger an invalid-currency error and handle it by its legacy error code, refund part of the charge it created. It exits non-zero on any unexpected response.
 
 ## Phases
 

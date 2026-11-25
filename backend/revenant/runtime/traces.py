@@ -36,17 +36,16 @@ def cap(event: dict[str, Any]) -> dict[str, Any]:
     trace = event.get("trace") or {}
     if len(json.dumps(trace, default=str)) <= MAX_TRACE_BYTES:
         return event
-    trace = dict(trace)
-    for key in ("upstream_response", "legacy_response", "upstream_request", "legacy_request",
-                "rules"):
-        if key in trace:
-            trace[key] = {"omitted": "larger than the trace size limit"}
-            trace["truncated"] = True
-            if len(json.dumps(trace, default=str)) <= MAX_TRACE_BYTES:
-                break
-    else:
-        trace = {"truncated": True}
-    return {**event, "trace": trace}
+    trace = {**trace, "truncated": True}
+    snapshots = ("upstream_response", "legacy_response", "upstream_request", "legacy_request",
+                 "rules")
+    by_size = sorted((key for key in snapshots if key in trace),
+                     key=lambda key: len(json.dumps(trace[key], default=str)), reverse=True)
+    for key in by_size:
+        trace[key] = {"omitted": "larger than the trace size limit"}
+        if len(json.dumps(trace, default=str)) <= MAX_TRACE_BYTES:
+            return {**event, "trace": trace}
+    return {**event, "trace": {"truncated": True}}
 
 
 class TracePipeline:

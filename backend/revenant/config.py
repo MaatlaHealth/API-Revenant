@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     runtime_max_body_bytes: int = 1024 * 1024
     runtime_max_concurrency: int = 100
     runtime_event_retention: int = 5000
+    # Where the bundled demonstration files are. Empty: the demo directory of the repository.
+    demo_dir: str = ""
 
     @property
     def is_production(self) -> bool:

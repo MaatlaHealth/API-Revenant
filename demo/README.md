@@ -26,7 +26,24 @@ The evidence is incomplete on purpose, so the product has something honest to re
 - The `409` of the refund operation names no error code.
 - Nothing shows what a page beyond the last one returned, or what a repeated `reference` did.
 
-## Not built yet
+## Running it
 
-The NovaPay simulator, the original GravePay client and the Docker demonstration arrive
-with slice 6.
+Without Docker, from the repository root, in the environment where the backend is installed:
+
+```
+python demo/run_demo.py
+```
+
+It starts the NovaPay simulator and the backend as separate processes on free local ports,
+runs the unchanged client against NovaPay directly (it fails), drives the whole workflow
+through the management API, and runs the same client through the runtime (it succeeds).
+The test suite runs this script.
+
+| Path | Contents |
+|---|---|
+| `novapay/simulator/app.py` | The NovaPay simulator. Imports no API Revenant code. Isolated, resettable sandboxes; rejects any request carrying a GravePay key; the receipt `GET` has a counted side effect |
+| `legacy-client/gravepay_client.py` | The GravePay client, written once and not edited. `legacy-client/SHA256` records its checksum and a test compares them |
+| `run_demo.py` | The runner described above |
+
+The Docker Compose demonstration (`docker-compose.yml`, three Dockerfiles) is written but has
+never been built or run: Docker is not installed on the development machine.

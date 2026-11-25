@@ -25,6 +25,7 @@ from revenant import __version__
 from revenant.api import (
     adapters,
     credentials,
+    demo,
     evidence,
     projects,
     reconstruction,
@@ -153,6 +154,7 @@ def create_app(settings: Settings | None = None, *, supervised: bool | None = No
     app.include_router(adapters.router)
     app.include_router(credentials.router)
     app.include_router(runtime.router)
+    app.include_router(demo.router)
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:

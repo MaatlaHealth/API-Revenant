@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Revision 11 (slices 1 to 5 implemented).
+Revision 12 (slices 1 to 6 implemented).
 
 This document covers two different things that must not be confused:
 
@@ -453,6 +453,27 @@ Listed in `security.md` (SSRF rows): address rules, DNS rebinding with a resolve
 Engine property tests (Hypothesis, derandomised): `move` copies any JSON value; nesting then flattening is the identity; time and integer conversions round-trip; scaling is exact or refused; fractions never silently become integers; `enum_map` is total and obeys `on_unmapped`; the cursor decodes to its page; walking legacy pages over a separately written cursor-paginated list yields every record once, in order; arbitrary rule sets terminate with a result or a transformation error; nothing is emitted from a place no rule referenced; no document the validator accepts can read or emit a credential carrier; accepted documents execute without internal errors. These tests found and fixed one defect: a whole float above 2^53 was converted to a different integer.
 
 `backend/tests/mutation/adapter_mutation_check.py` weakens forty-four rules of the engine, validator and compiler one at a time.
+
+### Implemented so far (slice 6)
+
+Tests in this slice that say "real servers" start the NovaPay simulator and the backend on local TCP ports and talk to them over HTTP; the legacy client runs as its own process.
+
+| Area | Tests |
+|---|---|
+| Demonstration (real servers) | The unchanged client fails against NovaPay directly and succeeds through the runtime; the five recorded requests are stored in order; `demo/run_demo.py` is run as a script; the client file matches its recorded checksum; the simulator reproduces every recording and imports no API Revenant code |
+| Host dispatch | Normalisation of twelve well-formed and thirty-four malformed hosts; three-way dispatch by exact match with the scope passed through untouched; `421` for unknown, suffix, prefix and sibling hosts; probes only on their exact paths; `400` for missing, duplicated and malformed hosts and absolute-form targets; five forwarded-host headers ignored by default; forwarded host used only from a trusted proxy, once, well formed; a property test that any host accepted at registration matches at dispatch |
+| Management isolation (real servers) | The management API, its documentation and the probes are not served on a legacy hostname, with or without the admin token; the admin token is not a legacy key and the reverse |
+| Credential separation (real servers) | Six kinds of missing or wrong legacy credential get `401` and nothing reaches the replacement; a rejected replacement credential is `502`; keys added and revoked take effect without a restart; the last key of a running runtime cannot be revoked; rotation and rollback reload the adapter; neither credential appears in any stored event |
+| Query-parameter credentials | Thirteen extraction cases and a property test (the sanitised query is the original minus exactly one segment); stored queries are sanitised; a duplicated carrier is `401`; other parameters keep their bytes and order; a key that would travel upstream in a body is blocked with `500` |
+| Request lifetime (real servers) | A slow upstream ends at the lifetime with `504`; a body that never arrives ends with `408` and nothing is sent; connection failure `502`, upstream timeout `504`; exception text is never stored |
+| Lease on the request path (real servers) | Nothing is admitted in standby, handover, superseded or fenced state; the second check stops a request before anything is sent; requests in progress are cancelled at once when ownership is lost; forty concurrent requests keep their own data; the concurrency cap refuses the excess |
+| Lease (real database row, injected clock) | One row, created released; only one of two processes acquires, including two that read the same row; a renewal defeats a concurrent take; a live lease is never taken and a stale one is; deadlines run from the last confirmed renewal and are not extended by failed renewals; serving through a database outage until grace ends and resuming afterwards; the request-path checks use no database; pause detection; sibling refusal; handover with renewal continuing during the drain; giving up without taking a live lease; not asking a newer holder; the handover deadline enforced by the renewal pass; force-acquire only when asked; the timing inequality |
+| Handover (two live instances) | A second instance on the same database acquires only after the first has stopped accepting and released; the first then serves nothing and is not ready; the second recovers the running runtime by itself |
+| Recovery (real servers) | After a restart the runtime serves on its pinned adapter version, not the latest, with no management call; a corrupted adapter row and an unusable credential each leave their runtime failed while the others recover and the process stays up |
+| Trace pipeline | Batched persistence; a thousand offers against a stuck writer never wait and memory stays at the queue bound; failures retried three times, then counted and recorded once as a loss event; shutdown drains within its deadline and counts the rest; a stopped writer is reported and restarted; the size cap; retention. Both counter identities are asserted after every scenario |
+| Control | Start refused with the specific reason until an adapter, the credential and a key exist, with nothing half-started; stop and start; host registration refuses nine kinds of unacceptable host and six spellings of a taken one; the seed is idempotent and does not take over an ordinary project |
+
+`backend/tests/mutation/runtime_mutation_check.py` weakens sixty rules of the runtime one at a time.
 
 ### End-to-end acceptance test
 

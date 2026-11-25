@@ -6,9 +6,9 @@ API Revenant is a design for reconstructing discontinued or breaking APIs from i
 
 It reconstructs *observable interface behaviour*. It does not recover hidden source code or undocumented business logic. Every reconstructed behaviour is classified as **observed**, **inferred** or **unknown**, and linked to the evidence behind it.
 
-## Status: slices 1 to 5 of 8 implemented
+## Status: slices 1 to 6 of 8 implemented
 
-**This repository does not contain a working product yet.** The design is complete and reviewed, and the first five implementation slices are in place. Nothing has been deployed.
+**The backend works end to end; there is no user interface yet and nothing has been deployed.** Six of eight implementation slices are in place. An unchanged legacy client can be served by the compatibility runtime on a local machine. Independent verification (slice 7) and the frontend (slice 8) do not exist.
 
 | Area | State |
 |---|---|
@@ -27,14 +27,17 @@ It reconstructs *observable interface behaviour*. It does not recover hidden sou
 | Mapping review: approve, reject, edit (validated against the rule models), bulk approval of observed mappings only, operation-effect declarations, invariant, gap and scope review, all audited | **Implemented and tested** |
 | Transformation engine: a fixed interpreter for eight rule operations, conditions, pagination by computed cursor and error rules; no expressions and no generated code | **Implemented and tested** (`backend/revenant/transform`), with property tests and a mutation check |
 | Adapter compilation: approved mappings only, static validation, required-field coverage per route, immutable numbered versions, dry run that sends nothing | **Implemented and tested** (`backend/revenant/adapter`) |
-| Runtime, verification | **Not implemented** (slices 6–7) |
-| Demonstration services (NovaPay simulator, legacy client) | **Not implemented** (slice 6). Only the evidence files exist |
+| Compatibility runtime: host dispatch with strict normalisation, path and host entry, legacy-key verification separate from the replacement credential, query-parameter credential removal, one total request lifetime, upstream error mapping, start-up recovery on the pinned adapter version | **Implemented and tested** (`backend/revenant/runtime`), with a mutation check |
+| Instance lease: one database row, atomic acquisition, renewal thread, grace and stop deadlines, handover, handover deadline | **Implemented and tested**, including a handover between two live instances. Designed to prevent two processes serving at once under the assumptions in `docs/architecture.md` §4.5; not an unconditional guarantee |
+| Trace pipeline: bounded queue, size cap, batched writer with bounded retry, loss counters and loss events, drain on shutdown | **Implemented and tested** |
+| Verification | **Not implemented** (slice 7) |
+| Demonstration services: NovaPay simulator (imports no API Revenant code), the unchanged GravePay client with a recorded checksum, `demo/run_demo.py` | **Implemented and tested.** Fictional services, sample data |
 | Frontend | **Not implemented.** `frontend/` is a placeholder |
-| Docker Compose demonstration | **Planned topology only**; it references images that do not exist yet and has never been run |
+| Docker Compose demonstration | **Written, never built or run** (Docker is not installed on the development machine). The same demonstration runs without Docker and is exercised by the tests |
 | Deployment (Render, Netlify) | **Configuration drafted, never deployed** |
 | Kiro project files (`.kiro/`) | **Authored outside Kiro and not yet loaded in it** |
 
-The backend currently does nothing useful to an end user: it starts, validates its configuration, answers two health endpoints, manages projects and their credentials, and imports evidence: it parses the legacy and replacement specifications and recorded exchanges, records where every extracted fact came from, and reports what the evidence does not establish. It then compares the two contracts, proposes mappings (each with the rule that produced it, a confidence and its evidence), records what cannot be established as gaps, and lets a person approve, reject or edit each proposal. Approved mappings compile into a versioned Adapter Document, and a dry run shows the replacement request a legacy request would become, without sending it. It cannot yet proxy traffic or verify anything: no request reaches a replacement API. Everything under the next heading describes the **planned** product.
+The backend currently does nothing useful to an end user: it starts, validates its configuration, answers two health endpoints, manages projects and their credentials, and imports evidence: it parses the legacy and replacement specifications and recorded exchanges, records where every extracted fact came from, and reports what the evidence does not establish. It then compares the two contracts, proposes mappings (each with the rule that produced it, a confidence and its evidence), records what cannot be established as gaps, and lets a person approve, reject or edit each proposal. Approved mappings compile into a versioned Adapter Document, and a dry run shows the replacement request a legacy request would become, without sending it. Started as a runtime, the adapter serves the legacy interface: it verifies the legacy client's key, translates the request, calls the replacement with its own credential, and translates the response. It cannot yet verify an adapter independently, and there is no user interface. Everything under the next heading describes the **planned** product.
 
 ## How it is designed to work (planned)
 
@@ -47,7 +50,7 @@ The backend currently does nothing useful to an end user: it starts, validates i
 
 ## Planned demonstration
 
-A fictional discontinued payment API (**GravePay**) and a fictional replacement (**NovaPay**). An original GravePay client is intended to fail against NovaPay directly and succeed through the API Revenant runtime, with identical source code. These are demonstration services, not real payment providers. So far the evidence exists (specifications and recorded exchanges, which the Evidence Vault imports) and reconstruction runs on it: 55 proposed mappings (47 observed, 8 inferred), 11 gaps and a 27-behaviour inventory. With the observed mappings and four inferred ones approved, five of the six operations compile into an adapter, and every recorded GravePay request transforms into exactly the recorded NovaPay request (and every recorded NovaPay response into the recorded GravePay response) in tests. The sixth operation, the events list, has no recorded exchange and is left out. The simulator, the client and the runtime do not exist yet.
+A fictional discontinued payment API (**GravePay**) and a fictional replacement (**NovaPay**). An original GravePay client is intended to fail against NovaPay directly and succeed through the API Revenant runtime, with identical source code. These are demonstration services, not real payment providers. So far the evidence exists (specifications and recorded exchanges, which the Evidence Vault imports) and reconstruction runs on it: 55 proposed mappings (47 observed, 8 inferred), 11 gaps and a 27-behaviour inventory. With the observed mappings and four inferred ones approved, five of the six operations compile into an adapter, and every recorded GravePay request transforms into exactly the recorded NovaPay request (and every recorded NovaPay response into the recorded GravePay response) in tests. The sixth operation, the events list, has no recorded exchange and is left out. The simulator, the client and the runtime now exist: `demo/run_demo.py` shows the unchanged client failing against NovaPay directly and succeeding through the runtime, and the test suite runs it.
 
 ## What can be run today
 
@@ -72,6 +75,13 @@ The mutation checks, which weaken one security control at a time and confirm the
 .venv\Scripts\python tests/mutation/evidence_mutation_check.py
 .venv\Scripts\python tests/mutation/reconstruction_mutation_check.py
 .venv\Scripts\python tests/mutation/adapter_mutation_check.py
+.venv\Scripts\python tests/mutation/runtime_mutation_check.py
+```
+
+The demonstration, as real processes on local ports (the simulator, the backend and the unchanged client), from the repository root:
+
+```powershell
+backend\.venv\Scripts\python demo\run_demo.py
 ```
 
 The specification consistency checks, from the repository root:
@@ -86,7 +96,8 @@ python tools/sync_outbound_tests.py --check
 
 `.github/workflows/ci.yml` runs on every push and pull request, on Linux and Windows:
 
-- the backend: lint, type check, tests (including Hypothesis property tests), five mutation checks and a migrate-and-start smoke test, from pinned dependency versions;
+- the backend: lint, type check, tests (including Hypothesis property tests and tests that start real local servers) and a migrate-and-start smoke test, from pinned dependency versions;
+- six mutation checks, each as its own job;
 - the backend tests again on a PostgreSQL service, plus migrations run from the command line as deployment does;
 - the outbound-transport spike suite and its mutation check;
 - the specification and configuration consistency check, including that the application's transport tests are identical to the spike's.
@@ -130,7 +141,7 @@ Development proceeds in vertical slices, each ending in something that runs and 
 | 3 | Project creation and evidence import | Implemented |
 | 4 | Reconstruction and mapping approval | Implemented |
 | 5 | Adapter compilation | Implemented |
-| 6 | Runtime and unchanged-client demonstration | Not started |
+| 6 | Runtime and unchanged-client demonstration | Implemented (Docker files untested) |
 | 7 | Independent verification | Not started |
 | 8 | Frontend and final polish | Not started |
 

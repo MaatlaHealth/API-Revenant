@@ -1,6 +1,6 @@
 # API Revenant — Technical Architecture
 
-Status: Stage 1 design, revision 6. Implementation status: slices 1 to 5 (configuration, logging, health endpoints, outbound guard, database layer, admin authentication, credential storage, redaction, projects API, evidence import, reconstruction and mapping review, transformation engine, adapter compilation and dry run) are implemented and tested; everything else in this document is still design. See `README.md` for what exists.
+Status: Stage 1 design, revision 6. Implementation status: slices 1 to 6 (everything up to and including the compatibility runtime, the instance lease and the trace pipeline) are implemented and tested; verification (§5, §6) and the frontend are still design. Where the implementation differs from this document, §4.12 says how. See `README.md` for what exists.
 
 ## 1. System overview
 
@@ -398,6 +398,22 @@ Two goals pull in opposite directions here: keep serving through a database outa
 | Process starts while the database is down | Not served | Cannot acquire; bounded retry, then exit non-zero | — | — | `/readyz` fails |
 
 Short interruptions — a database restart, a failover, a brief network fault — are shorter than the grace period and do not interrupt proxy traffic. The grace period and TTL are configurable for operators who prefer a different trade-off, subject to the start-up validation in §4.5.
+
+### 4.12 As implemented (slice 6)
+
+Differences from the sections above, and limits of what was tested:
+
+- **Lease acquisition.** The process reads the lease row and the database clock, decides whether the lease is released or older than the TTL, and then issues one `UPDATE … WHERE epoch = :seen AND beat = :seen AND holder_id = :seen AND released = :seen`. `beat` is a counter that every acquisition and renewal increments, so a renewal or another acquisition between the read and the update makes the update change no row. This is an atomic compare-and-set, as required, but it is two statements rather than the single statement with a time predicate described in §4.5.
+- **Watchdog.** There is no separate watchdog task at `stop_by`. Every request runs under one deadline of length L started at admission, and admission stops at `admit_until`, so every request has ended by `stop_by`. The second lease check also refuses to send after `stop_by`.
+- **Pause detection.** A pause is suspected when the renewal thread finds that more than twice the renewal interval has passed since its previous pass.
+- **Management hosts in development.** With `REVENANT_PUBLIC_HOSTS` empty (allowed outside production only), every well-formed host that is not a registered legacy host reaches the management API, so `421` is never returned. Production refuses to start without the list.
+- **Requests that fail before an adapter is resolved** (unknown project, stopped runtime, lease not held) are logged with method, path and outcome but are not stored as runtime events.
+- **Runtime-generated error bodies** are `{"revenant_error": "<outcome>"}` and contain no request data. They are not shaped like legacy errors, so a client can tell an error produced by the runtime from one translated from the replacement.
+- **Upstream `401`** always means the replacement rejected the stored credential and is answered `502`, even if an approved error rule exists for `401`.
+- **Internationalised hosts** are converted at registration with IDNA (UTS 46 mapping) and stored as A-labels.
+- **Not implemented:** the per-project upstream timeout and limit settings of `PATCH /runtime` (only `legacy_hosts` is accepted), the `cursor_cache` pagination strategy and its table, `GET /system/info`, and upgrading a stored key hash on the request path during master-key rotation (the maintenance command lists keys to re-register).
+- **Tested with real servers:** path and host entry, the unchanged client, credential separation, the request lifetime (`408`, `504`), cancellation on ownership loss, the concurrency cap, restart recovery, and a handover between two instances sharing one database. **Tested at the lease level only, with an injected clock:** serving through a database outage until the grace period ends, stale-lease expiry, pause detection and the handover deadline. **Not tested:** behaviour under real clock drift or a real process suspend, and the Docker topology.
+- **Commit before response.** Management requests commit their database transaction before the response is sent, so a client that acts on a response always finds its change stored.
 
 ### 4.11 Health
 

@@ -26,6 +26,15 @@ def _run_tests(tests: list[str], basetemp: Path) -> subprocess.CompletedProcess[
     )
 
 
+def _selected(mutations: Mutations) -> Mutations:
+    """All mutations, or the slice ``START:END`` given as the first argument."""
+    if len(sys.argv) < 2:
+        return mutations
+    start, _, end = sys.argv[1].partition(":")
+    names = list(mutations)[int(start or 0): int(end) if end else None]
+    return {name: mutations[name] for name in names}
+
+
 def run(mutations: Mutations, tests: list[str]) -> int:
     """Run every mutation. Returns a process exit status."""
     originals: dict[str, str] = {}
@@ -36,6 +45,7 @@ def run(mutations: Mutations, tests: list[str]) -> int:
             print(f"ANCHOR NOT FOUND EXACTLY ONCE in {rel} for mutation: {name}")
             return 2
 
+    mutations = _selected(mutations)
     rows: list[tuple[str, bool, str]] = []
     with tempfile.TemporaryDirectory(prefix="mutants-") as tmp:
         baseline = _run_tests(tests, Path(tmp) / "baseline")
@@ -48,6 +58,11 @@ def run(mutations: Mutations, tests: list[str]) -> int:
             try:
                 target.write_text(originals[rel].replace(old, new), encoding="utf-8")
                 proc = _run_tests(tests, Path(tmp) / f"m{index}")
+            except subprocess.TimeoutExpired:
+                # A mutation that makes the tests hang has been noticed by them.
+                rows.append((name, True, "the tests did not finish: the mutation made them hang"))
+                print(f"  {len(rows)}/{len(mutations)} detected (hang): {name}", flush=True)
+                continue
             finally:
                 target.write_text(originals[rel], encoding="utf-8")
             failed = next(
@@ -56,6 +71,8 @@ def run(mutations: Mutations, tests: list[str]) -> int:
             )
             last = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
             rows.append((name, proc.returncode != 0, failed or last))
+            print(f"  {len(rows)}/{len(mutations)} "
+                  f"{'detected' if proc.returncode != 0 else 'MISSED'}: {name}", flush=True)
 
     width = max(len(name) for name, _, _ in rows)
     missed = 0

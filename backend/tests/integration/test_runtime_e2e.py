@@ -59,7 +59,8 @@ class Stack:
         return httpx.get(f"{self.upstream}/__sandbox/default/state").json()
 
 
-def prepare(admin: Any, project_id: str, upstream: str, *, start: bool = True) -> None:
+def prepare(admin: Any, project_id: str, upstream: str, *, start: bool = True,
+            hosts: list[str] | None = None) -> None:
     """Drive the whole workflow through the management API, as a user would."""
     def call(method: str, path: str, expect: int, **kwargs: Any) -> Any:
         response = admin.request(method, f"{base(project_id)}{path}", headers=ADMIN, **kwargs)
@@ -75,7 +76,8 @@ def prepare(admin: Any, project_id: str, upstream: str, *, start: bool = True) -
     call("PUT", "/credentials/outbound/replacement_credential", 200,
          json={"value": NOVAPAY_TOKEN})
     call("POST", "/credentials/inbound", 201, json={"label": "legacy client", "value": LEGACY_KEY})
-    call("PATCH", "/runtime", 200, json={"legacy_hosts": [LEGACY_HOST]})
+    call("PATCH", "/runtime", 200,
+         json={"legacy_hosts": [LEGACY_HOST] if hosts is None else hosts})
     if start:
         call("POST", "/runtime/start", 200)
 

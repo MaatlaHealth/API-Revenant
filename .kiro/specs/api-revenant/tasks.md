@@ -107,31 +107,31 @@ Rules for every slice:
 
 *Done when:* the unchanged GravePay client fails against the NovaPay simulator directly and succeeds through the runtime, by host entry and by path entry, with traces visible through the API; restart recovery works.
 
-- [ ] 6.1 Instance lease: single-row table, atomic acquisition, renewal thread, `admit_until` and `stop_by` deadlines on a suspend-aware clock, sibling-worker refusal, timing validation (`TTL ≥ grace + request lifetime + clock margin`), stale-lease expiry, development force-acquire flag, readiness integration
+- [x] 6.1 Instance lease: single-row table, atomic acquisition, renewal thread, `admit_until` and `stop_by` deadlines on a suspend-aware clock, sibling-worker refusal, timing validation (`TTL ≥ grace + request lifetime + clock margin`), stale-lease expiry, development force-acquire flag, readiness integration. *Acquisition reads the row and then issues one compare-and-set on its epoch and a counter that every renewal increments, instead of one statement with a time predicate; staleness is still measured with the database clock.*
   - _Requirements: 7.19, 7.26, 7.27, 7.30, 7.31, 7.39_
-- [ ] 6.2 Lease handover protocol: handover request, standby wait, holder stop-accepting → drain → trace drain → release, renewal continues during drain, handover deadline enforced by the renewal thread, exit rules for waiting processes
+- [x] 6.2 Lease handover protocol: handover request, standby wait, holder stop-accepting → drain → trace drain → release, renewal continues during drain, handover deadline enforced by the renewal thread, exit rules for waiting processes
   - _Requirements: 7.28, 7.29, 7.36, 7.37, 7.38_
-- [ ] 6.3 Registry, activation/deactivation transaction, credential resolution at load, readiness preconditions
+- [x] 6.3 Registry, activation/deactivation transaction, credential resolution at load, readiness preconditions
   - _Requirements: 7.1, 7.2, 7.3, 11.9_
-- [ ] 6.4 `HostDispatcher`: shared `normalise_host`, exact-match host table, three-way dispatch (legacy / management / `421`), `400` for malformed hosts, unmodified scope pass-through, management isolation, forwarded-header policy with trusted proxies, registration validation and collision handling
+- [x] 6.4 `HostDispatcher`: shared `normalise_host`, exact-match host table, three-way dispatch (legacy / management / `421`), `400` for malformed hosts, unmodified scope pass-through, management isolation, forwarded-header policy with trusted proxies, registration validation and collision handling
   - _Requirements: 7.6, 7.12, 7.13, 7.20, 7.21, 7.22, 7.23, 7.24, 7.25_
-- [ ] 6.5 `RuntimeProxy`: path entry mount, route matching, forwarding through the outbound guard, upstream error mapping
+- [x] 6.5 `RuntimeProxy`: path entry mount, route matching, forwarding through the outbound guard, upstream error mapping
   - _Requirements: 7.9, 7.11_
-- [ ] 6.6 Request lifetime and lease checks: one total deadline covering body read, upstream call and response; `408` / `504` outcomes; admission check and second check before the upstream call; watchdog at `stop_by`; cancellation on ownership loss; graceful draining
+- [x] 6.6 Request lifetime and lease checks: one total deadline covering body read, upstream call and response; `408` / `504` outcomes; admission check and second check before the upstream call; watchdog at `stop_by`; cancellation on ownership loss; graceful draining
   - _Requirements: 7.32, 7.33, 7.34, 7.35_
-- [ ] 6.7 Authentication separation: carrier extraction before any other processing, inbound verification, outbound attachment after snapshot, pre-send leak check in raw and decoded form, failure behaviours
+- [x] 6.7 Authentication separation: carrier extraction before any other processing, inbound verification, outbound attachment after snapshot, pre-send leak check in raw and decoded form, failure behaviours
   - _Requirements: 6.2, 6.9, 6.10, 6.11, 11.10_
-- [ ] 6.8 Query-parameter credentials: exact extraction procedure, sanitised query preserving other parameters and order, duplicate rejection, no recording of query or headers before an adapter is resolved, query-free upstream URLs in logs and traces, server access log disabled
+- [x] 6.8 Query-parameter credentials: exact extraction procedure, sanitised query preserving other parameters and order, duplicate rejection, no recording of query or headers before an adapter is resolved, query-free upstream URLs in logs and traces, server access log disabled
   - _Requirements: 6.13, 6.14, 6.15, 6.16, 6.17, 6.18_
-- [ ] 6.9 Trace pipeline: bounded queue, size cap, batched writer thread with bounded retry, counters, `trace_loss` events, supervised writer, graceful shutdown drain, retention
+- [x] 6.9 Trace pipeline: bounded queue, size cap, batched writer thread with bounded retry, counters, `trace_loss` events, supervised writer, graceful shutdown drain, retention
   - _Requirements: 7.7, 7.14, 7.15, 7.16, 7.17_
-- [ ] 6.10 Startup recovery, database-outage behaviour, runtime health endpoint with trace, lease, in-flight and upstream state; runtime events API (persisted events only) and response headers
+- [x] 6.10 Startup recovery, database-outage behaviour, runtime health endpoint with trace, lease, in-flight and upstream state; runtime events API (persisted events only) and response headers. *A request that fails before an adapter is resolved is logged but not stored as an event. The whole-application database-outage scenario is covered at the lease level only.*
   - _Requirements: 7.4, 7.5, 7.8, 7.10, 7.16, 7.27_
-- [ ] 6.11 Demonstration services: deterministic NovaPay simulator that imports no `revenant` code, with isolated resettable sandboxes, the side-effecting receipt `GET` and its side-effect counter; legacy client and checksum file; demo seed endpoint and `demo/run_demo.py`
+- [x] 6.11 Demonstration services: deterministic NovaPay simulator that imports no `revenant` code, with isolated resettable sandboxes, the side-effecting receipt `GET` and its side-effect counter; legacy client and checksum file; demo seed endpoint and `demo/run_demo.py`
   - _Requirements: 9.1, 9.2, 9.3, 9.6, 9.7, 9.8_
-- [ ] 6.12 Dockerfiles and Compose profiles with hostname alias routing to `HostDispatcher`
+- [x] 6.12 Dockerfiles and Compose profiles with hostname alias routing to `HostDispatcher`. *Written but never built or run: Docker is not installed on the development machine. Host routing itself is tested with real servers and an explicit `Host` header.*
   - _Requirements: 9.4, 12.3_
-- [ ] 6.13 End-to-end acceptance test (before fails, after succeeds, checksum equal, host entry exercised with an explicit `Host` header)
+- [x] 6.13 End-to-end acceptance test (before fails, after succeeds, checksum equal, host entry exercised with an explicit `Host` header)
   - _Requirements: 9.2, 9.3, 9.4_
 - [ ] 6.14 Runtime test tables from `docs/testing-strategy.md`: hostname routing and host security; authentication; query-parameter credentials; trace pipeline; worker constraint and instance lease including handover and stale-process cases; request lifetime and in-flight requests; randomised mutual-exclusion test within the assumptions and the tests that demonstrate the documented limits; resilience
   - _Requirements: 7.4, 7.5, 7.6, 7.9, 7.10, 7.12, 7.14, 7.15, 7.16, 7.17, 7.18, 7.19, 7.20, 7.21, 7.22, 7.23, 7.24, 7.25, 7.26, 7.27, 7.28, 7.29, 7.30, 7.31, 7.32, 7.33, 7.34, 7.35, 7.36, 7.37, 7.38, 7.39, 6.9, 6.10, 6.11, 6.13, 6.14, 6.15, 6.16, 6.17, 6.18_
