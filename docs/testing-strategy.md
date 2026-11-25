@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Revision 10 (slices 1 to 4 implemented).
+Revision 11 (slices 1 to 5 implemented).
 
 This document covers two different things that must not be confused:
 
@@ -436,6 +436,23 @@ Listed in `security.md` (SSRF rows): address rules, DNS rebinding with a resolve
 | Access | All twenty routes require the admin token before the project is looked up; nothing of one project is reachable through another |
 
 `backend/tests/mutation/reconstruction_mutation_check.py` weakens forty-eight of these rules one at a time (for example: propose read-only for safe methods, drop the method floor, bulk-approve inferred mappings, store an edit without validating it, never report staleness, classify name matches as observed, break pairing ties by order).
+
+### Implemented so far (slice 5)
+
+| Area | Tests |
+|---|---|
+| Replay of the demonstration | Each of the ten recorded GravePay requests, dry-run through the compiled adapter, equals the paired recorded NovaPay request (method, path, query, body); each of the ten recorded NovaPay responses transforms into exactly the recorded GravePay response, errors included |
+| Compilation | Refused without a reconstruction, with a stale one, without an approved authentication mapping or base URL; only approved mappings appear in the document and every rule names its mapping; a rejected mapping leaves the next version; earlier versions never change; the same mappings give the same document hash |
+| Coverage | A route missing a required replacement request field, a required legacy response field or its pagination mapping is left out and reported with the reason |
+| Effects | Compiled from approved declarations only; an unapproved proposal is not a declaration; the method floor and the specification marker apply |
+| Credentials | No credential value in the document, the database column or any API response; carriers stripped before rules run; a legacy key that would travel upstream in a body is blocked |
+| Engine operations | Every operation, conditions, required and missing sources, nineteen conversions and nineteen refusals, conflicts, limits, case-insensitive headers, traces without values |
+| Validator | A valid document and twenty-four broken ones, each rejected for the stated reason; query-parameter carriers; all failures listed |
+| Path safety | Path values are percent-encoded as one segment and cannot add a segment or a query string |
+
+Engine property tests (Hypothesis, derandomised): `move` copies any JSON value; nesting then flattening is the identity; time and integer conversions round-trip; scaling is exact or refused; fractions never silently become integers; `enum_map` is total and obeys `on_unmapped`; the cursor decodes to its page; walking legacy pages over a separately written cursor-paginated list yields every record once, in order; arbitrary rule sets terminate with a result or a transformation error; nothing is emitted from a place no rule referenced; no document the validator accepts can read or emit a credential carrier; accepted documents execute without internal errors. These tests found and fixed one defect: a whole float above 2^53 was converted to a different integer.
+
+`backend/tests/mutation/adapter_mutation_check.py` weakens forty-four rules of the engine, validator and compiler one at a time.
 
 ### End-to-end acceptance test
 

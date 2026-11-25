@@ -145,7 +145,8 @@ def test_reconstruction_of_the_demonstration(
     assert project["status"] == "reconstructed"
     steps = {step["key"]: step for step in project["workflow"]}
     assert steps["reconstruction"]["complete"] is True
-    assert steps["adapter"]["blocked_by"] == "Not available in this build yet."
+    assert steps["adapter"] == {"key": "adapter", "title": "Compile the adapter",
+                                "complete": False, "available": True, "blocked_by": None}
     assert get(client, admin, project_id, "/reconstructions/latest")["id"] == rebuilt["id"]
 
 

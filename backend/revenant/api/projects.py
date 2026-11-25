@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from revenant import audit
 from revenant.api.deps import AdminActor, CurrentProject, DbSession, get_settings, require_admin
 from revenant.config import Settings
-from revenant.db.models import AuditRecord, Project, Reconstruction
+from revenant.db.models import AdapterVersion, AuditRecord, Project, Reconstruction
 from revenant.errors import Conflict, OutboundBlocked, UnsafeUrl
 from revenant.evidence.service import EvidenceService
 from revenant.security.outbound import Resolver, check_destination, system_resolver
@@ -110,7 +110,7 @@ def validate_base_url(url: str, settings: Settings, resolver: Resolver) -> str:
 
 def workflow(
     project: Project, counts: dict[str, int], missing_codes: set[str],
-    reconstruction: Reconstruction | None = None,
+    reconstruction: Reconstruction | None = None, adapter_current: bool = False,
 ) -> list[WorkflowStep]:
     """Which steps are done and what blocks the next one. Computed from stored data."""
     legacy_spec = "no_specification:legacy" not in missing_codes
@@ -142,13 +142,18 @@ def workflow(
             (fixtures, "Import historical fixtures first."),
             (reconstruction is None or current,
              "Evidence has changed since the last reconstruction. Run it again."))))
+    reconstructed = evidence_ready and current
+    compiled = reconstructed and adapter_current
     steps.append(WorkflowStep(
-        key="adapter", title="Compile the adapter", complete=False, available=False,
-        blocked_by="Not available in this build yet." if evidence_ready and current
+        key="adapter", title="Compile the adapter", complete=compiled, available=reconstructed,
+        blocked_by=None if reconstructed else "Requires the previous step."))
+    steps.append(WorkflowStep(
+        key="verification", title="Verify", complete=False, available=False,
+        blocked_by="Not available in this build yet." if compiled
         else "Requires the previous step."))
-    for key, title in (("verification", "Verify"), ("runtime", "Run the compatibility runtime")):
-        steps.append(WorkflowStep(key=key, title=title, complete=False, available=False,
-                                  blocked_by="Requires the previous step."))
+    steps.append(WorkflowStep(key="runtime", title="Run the compatibility runtime",
+                              complete=False, available=False,
+                              blocked_by="Requires the previous step."))
     return steps
 
 
@@ -158,12 +163,16 @@ def describe(project: Project, service: EvidenceService) -> ProjectOut:
     latest = service.session.scalar(
         select(Reconstruction).where(Reconstruction.project_id == project.id)
         .order_by(Reconstruction.sequence.desc()).limit(1))
+    # An adapter counts only if it was compiled from the latest reconstruction.
+    compiled = latest is not None and service.session.scalar(
+        select(AdapterVersion.id).where(AdapterVersion.reconstruction_id == latest.id)
+        .limit(1)) is not None
     return ProjectOut(
         id=project.id, slug=project.slug, name=project.name, description=project.description,
         legacy_name=project.legacy_name, replacement_name=project.replacement_name,
         replacement_base_url=project.replacement_base_url, is_demo=project.is_demo,
         status=project.status, evidence_version=project.evidence_version, evidence=counts,
-        workflow=workflow(project, counts, codes, latest),
+        workflow=workflow(project, counts, codes, latest, compiled),
         created_at=project.created_at, updated_at=project.updated_at,
     )
 

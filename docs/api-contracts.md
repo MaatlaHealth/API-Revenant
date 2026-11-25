@@ -94,10 +94,10 @@ Review applies to the latest reconstruction only. A mapping, gap, invariant or b
 
 | Method & path | Purpose |
 |---|---|
-| `POST /projects/{id}/adapters` | Compile approved mappings into a new adapter version. `422 adapter_invalid` lists every validation failure. |
+| `POST /projects/{id}/adapters` | Compile the approved mappings of the latest reconstruction into a new adapter version. `409 stale_reconstruction` if evidence has changed since it. `422 adapter_invalid` lists every validation failure. A route whose required replacement request fields or required legacy response fields are not produced is left out and listed in `excluded_routes` with the reasons; `warnings` reports, for example, a replacement credential that is not stored yet. |
 | `GET /projects/{id}/adapters` | Versions. |
 | `GET /projects/{id}/adapters/{version}` | The full Adapter Document (contains no secret values). |
-| `POST /projects/{id}/adapters/{version}/dry-run` | Body: a legacy request. Returns the transformed upstream request and rule trace **without** sending it. |
+| `POST /projects/{id}/adapters/{version}/dry-run` | Body: a legacy request (`method`, `path`, `query?`, `headers?`, `body?`). Returns `outcome` (`ok`, `no_route`, `transform_error`, `credential_leak_blocked`), the transformed upstream request, the rule trace and the unmapped source fields, **without** sending it (`sent` is always `false`). Credential carriers are removed before any rule runs and are never echoed; the legacy key is not verified and the replacement credential is not attached. |
 
 ## Verification
 

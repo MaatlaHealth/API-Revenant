@@ -34,6 +34,8 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
   "types-PyYAML",
+  # Slice 5: property tests of the transformation engine.
+  "hypothesis>=6.100",
 ]
 
 [tool.setuptools.packages.find]

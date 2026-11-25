@@ -450,3 +450,29 @@ class Behaviour(Base):
     scope: Mapped[str] = mapped_column(String(16), default="in_scope")
     scope_note: Mapped[str] = mapped_column(Text, default="")
     unsupported_reason: Mapped[str | None] = mapped_column(Text)
+
+
+# ---- slice 5: adapters -----------------------------------------------------------------
+
+
+class AdapterVersion(Base):
+    """A compiled Adapter Document. Immutable after insert."""
+
+    __tablename__ = "adapter_versions"
+    __table_args__ = (UniqueConstraint("project_id", "version"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer)
+    reconstruction_id: Mapped[str] = mapped_column(
+        ForeignKey("reconstructions.id", ondelete="CASCADE")
+    )
+    # The document holds references to credentials, never their values.
+    document: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    document_sha256: Mapped[str] = mapped_column(String(64))
+    mapping_ids: Mapped[list[Any]] = mapped_column(PortableJSON, default=list)
+    # Routes left out and why, and warnings. Written once with the document.
+    report: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    compiled_by: Mapped[str] = mapped_column(String(64))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

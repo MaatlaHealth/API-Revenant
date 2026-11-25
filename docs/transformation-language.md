@@ -147,13 +147,21 @@ An Adapter Document is rejected at compile time and again at load time if any of
 1. Schema validation (discriminated union on `op`; unknown fields forbidden).
 2. Path grammar, scope availability and depth limits.
 3. Target collisions — two unconditional rules writing the same target.
-4. Type compatibility where source and target types are known from the contracts.
-5. Every `secret_ref` names an outbound credential with an active version; every `mapping_id` refers to an approved mapping.
+4. Type compatibility where source and target types are known from the contracts. *(Not implemented yet.)*
+5. Every `mapping_id` refers to an approved mapping (checked at compile time). Every `secret_ref` must name an outbound credential with an active version when the runtime loads the adapter; at compile time a missing credential is reported as a warning, so an adapter can be compiled and dry-run before the credential is stored.
 5a. No rule reads from or writes to a credential carrier (§4). No rule writes the outbound credential's header or parameter.
 5b. Every route has `effect` set to `read_only`, `state_changing` or `unknown`. A route with `effect: read_only` whose `match.method` or `upstream.method` is not `GET`, `HEAD` or `OPTIONS` is rejected. `read_only` must be backed by an approved `effect` mapping; without one the compiler writes `state_changing` (unsafe method on either side) or `unknown`.
 6. Every required replacement request field is produced by some rule.
 7. Limits: ≤ 200 routes, ≤ 200 rules per list, document ≤ 512 KB.
 8. Upstream base URL passes the outbound guard.
+
+### As implemented
+
+- Timestamps are converted only in the form `YYYY-MM-DDTHH:MM:SSZ` (UTC, whole seconds). Any other form is a transformation error, not a best-effort parse.
+- Numbers are converted with exact decimal arithmetic. A result that a JSON number cannot hold exactly, a fraction where an integer is required, and a magnitude beyond 10^30 are errors.
+- A substituted template value is never scanned for placeholders again.
+- When no error rule matches, the legacy response has the upstream status and no body; nothing is invented.
+- A compiled route that fails the required-field checks is left out of the document and reported; it is never emitted incomplete.
 
 ## 9. Execution limits
 

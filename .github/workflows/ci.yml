@@ -100,6 +100,9 @@ jobs:
       - name: Mutation check of reconstruction and mapping review
         if: matrix.os == 'ubuntu-latest'
         run: python tests/mutation/reconstruction_mutation_check.py
+      - name: Mutation check of the transformation engine, validator and compiler
+        if: matrix.os == 'ubuntu-latest'
+        run: python tests/mutation/adapter_mutation_check.py
       - name: Migrate, start the server and call the health endpoints
         if: matrix.os == 'ubuntu-latest'
         env:

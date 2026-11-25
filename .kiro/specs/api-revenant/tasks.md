@@ -86,19 +86,19 @@ Rules for every slice:
 
 *Done when:* approved mappings for the demonstration compile into a validated Adapter Document, and a dry run shows the transformed NovaPay request for each GravePay fixture.
 
-- [ ] 5.1 Pydantic models for the Adapter Document and all rule types, including `route.effect`
+- [x] 5.1 Pydantic models for the Adapter Document and all rule types, including `route.effect`
   - _Requirements: 5.1_
-- [ ] 5.2 Path parser and interpreter for `move`, `const`, `default`, `convert`, `enum_map`, `template`, `each`, `drop`, with conditions and rule traces
+- [x] 5.2 Path parser and interpreter for `move`, `const`, `default`, `convert`, `enum_map`, `template`, `each`, `drop`, with conditions and rule traces
   - _Requirements: 6.1, 6.7, 6.8_
-- [ ] 5.3 Pagination: `computed_cursor` and response envelope conversion
+- [x] 5.3 Pagination: `computed_cursor` and response envelope conversion
   - _Requirements: 6.3_
-- [ ] 5.4 Error rules and envelope
+- [x] 5.4 Error rules and envelope
   - _Requirements: 6.5, 6.6_
-- [ ] 5.5 Static validator: credential carriers (header or query parameter) unreachable by rules; a route declared read-only may not use a state-changing method on either side
+- [x] 5.5 Static validator: credential carriers (header or query parameter) unreachable by rules; a route declared read-only may not use a state-changing method on either side. *Not implemented: the type-compatibility check between source and target fields. A missing replacement credential is a compile warning; it is enforced when the runtime loads the adapter (slice 6).*
   - _Requirements: 5.3, 5.4, 5.7, 6.12_
-- [ ] 5.6 Engine property tests (operation semantics, safety, cursor round-trip, no credential carrier reachable)
+- [x] 5.6 Engine property tests (operation semantics, safety, cursor round-trip, no credential carrier reachable)
   - _Requirements: 6.1, 6.3, 6.12_
-- [ ] 5.7 Adapter compiler: compile approved mappings and effects, required-field coverage check, versioning, dry run
+- [x] 5.7 Adapter compiler: compile approved mappings and effects, required-field coverage check, versioning, dry run. *A route that fails the coverage check is left out of the document and listed with the reason; the other routes still compile.*
   - _Requirements: 4.4, 5.1, 5.2, 5.5, 5.7_
 - [ ]* 5.8 Pagination `cursor_cache` strategy with hop limit
   - _Requirements: 6.4_
